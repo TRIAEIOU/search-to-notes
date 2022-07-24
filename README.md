@@ -13,7 +13,7 @@ Search to notes (S2N) is designed to rapidly generate notes from a list of terms
 Edit the search terms manually, in the Enter/paste window or load them from a text file (each line will be interpreted as a search term). The terms will be parsed and “split” on tab character and the sum as well as part available in the query template (see below). Remarks:
 - Ctrl+return will close (accept) the Enter/Paste window, escape will cancel.
 - When new terms are loaded (even if they are the same as the old ones) all downloaded files are removed (of course everything that has already been generated to notes is retained inside Anki).
-<img src="https://aws1.discourse-cdn.com/standard11/uploads/anki2/original/2X/3/3964b1302e947f999b8245886b7c042bec9947b7.jpeg" height="300">
+<img src="https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/1.jpeg" height="400">
 
 ## 2. Specify search query template and run the query
 The template will be applied to each term using the following substitution:
@@ -41,7 +41,7 @@ Select (so that they are highlighted) the relevant images for each term (S2N rem
 - Movement between the image thumbnails can be done with the arrow keys, space bar will select/deselect.
 - A zoom view is available by right click/return on a thumbnail. Escape, return, right and left click closes the zoom window (it can also be left open).
 - The size of the images in the thumbnail view can be set in the config.
-<img src="https://aws1.discourse-cdn.com/standard11/uploads/anki2/original/2X/b/bf65ec38c15569370abe579cd2bab598f0529f9e.png" height="300">
+<img src="https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/2.png" height="400">
 
 ## 4. Specify note generation details
 Select deck, note type, and in which field the terms and images go respectively (e.g. term on front, images on back or vice versa). Remarks:
@@ -49,7 +49,7 @@ Select deck, note type, and in which field the terms and images go respectively 
 - For basic style notes one note of the specified type per term will be generated to the selected deck, term and images inserted in the specified fields.
 - For cloze style notes one note of the specified type will be generated and each term/image inserted as a cloze, either with the term as prompt and the image(s) inside the cloze or vice versa. With the term as prompt the clozes will be inserted with a line break between each “pair”. With the image(s) as prompt the clozes will be inserted as a table (table attributes adjustable in the config, i.e. you can insert style=”color: red;” or add a CSS class etc.) to be able to see which images and cloze belong together.
 - Once generated a dialog will list any terms that did not get any notes/clozes (because no images were found in the search or no images were selected) to allow copying those to run another query on or create those notes some other way.
-<img src="https://aws1.discourse-cdn.com/standard11/uploads/anki2/original/2X/b/bbbca02fe21cc8883b6769fdfa64cae097b48ec5.png" height="300">
+<img src="https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/3.png" height="400">
 
 ## Remarks
 The results returned by the DDG API are somewhat mediocre, anyone that is up for it can plug in another search engine (requirements in the source, but basically provide a search function that returns a list of matches as well as functions that return tooltip and legend strings).
