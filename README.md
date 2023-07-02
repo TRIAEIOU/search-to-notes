@@ -24,10 +24,10 @@ Edit the search terms manually, in the Enter/paste window or load them from a te
 
 The template will be applied to each term using the following substitution:
 
-- %0 – will be replaced with the complete term
-- %1 – will be replaced by the first part of the term (everything up to the first tab character, i.e. if there are no tab characters it will be the same as %0)
-- %2 – will be replaced by the second part of the term (everything between the first and second tab character), etc.
-- Any %\<digit> that doesn’t have a corresponding part in the term (i.e. %3 in the template when a term only has one tab character) is deleted.
+- %0 - will be replaced with the complete term
+- %1 - will be replaced by the first part of the term (everything up to the first tab character, i.e. if there are no tab characters it will be the same as %0)
+- %2 - will be replaced by the second part of the term (everything between the first and second tab character), etc.
+- Any %\<digit> that doesn't have a corresponding part in the term (i.e. %3 in the template when a term only has one tab character) is deleted.
 
 The search syntax is as follows:
 
@@ -42,7 +42,7 @@ The search syntax is as follows:
 ### Remarks
 
 - I think all med students know of si.e. that have a lot of useful anatomy images with specific parts highlighted, I will refrain from spelling it out lest they change their site to make things like this more difficult.
-- It is likely useful to set nmax – the image search and downloading is slow and the relevance gets lower rather rapidly.
+- It is likely useful to set nmax - the image search and downloading is slow and the relevance gets lower rather rapidly.
 - When pressing "Search" a dialog will present the terms and their respective search query to allow the user to inspect and abort if there was some mistake in the template.
 
 ## 3. Select which images to use for each term
@@ -50,7 +50,7 @@ The search syntax is as follows:
 Select (so that they are highlighted) the relevant images for each term (S2N remembers which images are selected for each term as you swap between them). Remarks:
 
 - All actions can be made with the mouse (selecting term, selecting/deselecting images).
-- Keyboard shortcuts for moving down and up in the list of terms (default ‘S’ and ‘W’ respectively) even when out of focus reduces the need for mouse movement to allow rapid iteration through the terms.
+- Keyboard shortcuts for moving down and up in the list of terms (default 'S' and 'W' respectively) even when out of focus reduces the need for mouse movement to allow rapid iteration through the terms.
 - Movement between the image thumbnails can be done with the arrow keys, space bar will select/deselect.
 - A zoom view is available by right click/return on a thumbnail. Escape, return, right and left click closes the zoom window (it can also be left open).
 - The size of the images in the thumbnail view can be set in the config.
@@ -66,7 +66,7 @@ Select deck, note type, and in which field the terms and images go respectively 
 - For cloze style notes one note of the specified type will be generated and each term/image inserted as a cloze, either with the term as prompt and the image(s) inside the cloze or vice versa. With the term as prompt the clozes will be inserted with a line break between each "pair". With the image(s) as prompt the clozes will be inserted as a table (table attributes adjustable in the config, i.e. you can insert style="color: red;" or add a CSS class etc.) to be able to see which images and cloze belong together.
 - Once generated a dialog will list any terms that did not get any notes/clozes (because no images were found in the search or no images were selected) to allow copying those to run another query on or create those notes some other way.
 
-![Step 4](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/3.png?raw=true"){height="400"}
+![Step 4](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/3.png?raw=true){height="400"}
 
 ## Remarks
 
