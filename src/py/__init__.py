@@ -1,118 +1,30 @@
-############################## LICENSE ####################################
-# MIT
-###########################################################################
-
-############################## CREDITS ####################################
-# Credit to Deepan (https://github.com/deepanprabhu) for the DDG api
-# implemenation: https://github.com/deepanprabhu/duckduckgo-images-api
-###########################################################################
-
-############################### NOTES #####################################
-# SEARCH ENGINE IMPLEMENTATION
-# Additional search engines are implemented in separate modules in the
-# add-on directory. S2N expects the following functions from the engine:
-#   def legend() -> str (text to be inserted under query box)
-#   def tooltip() -> str (text/HTML to be used as tooltip for the query box)
-#   def search(query: str) -> [{'title': <image name>, 'url': <url to image>,
-#       'height': <image height>, 'width': <image width>} ...]
-###########################################################################
-import os, re, codecs, tempfile, requests, base64, importlib, time
+"""
+Search to notes main application
+"""
+import os, re, codecs, tempfile, requests, base64, importlib, time, logging
+from dataclasses import dataclass
 from aqt import mw
 from aqt.qt import *
 from aqt.utils import *
 from aqt.operations import CollectionOp, QueryOp
 from anki import consts, collection
+from .consts import *
+from .engine import *
+
 if qtmajor == 6:
-    from . import main_dlg_qt6 as main_dlg, enter_dlg_qt6 as enter_dlg, image_dlg_qt6 as image_dlg, list_dlg_qt6 as list_dlg
+    from . import maindialog_qt6 as ui_maindialog, enterdialog_qt6 as ui_enterdialog, imagedialog_qt6 as ui_imagedialog, listdialog_qt6 as ui_listdialog
 elif qtmajor == 5:
-    from . import main_dlg_qt5 as main_dlg, enter_dlg_qt5 as enter_dlg, image_dlg_qt5 as image_dlg, list_dlg_qt5 as list_dlg
-from . import imghdr
-
-# MISC CONSTANTS
-LIST_DLG_HMAX = 500
-TERM_ROLE = Qt.ItemDataRole.UserRole + 1
-
-# CONFIG KEYS
-GEOMETRY = "Geometry"
-SPLITTER = "Splitter pos"
-THUMB_HEIGHT = "Thumbnail height"
-THUMB_WIDTH = "Thumbnail width"
-QUERY_TEMPLATE =  "Query template"
-DECK = "Deck ID"
-NOTE = "Note type ID"
-DIR = "Dir"
-TERM = "Term field"
-IMAGE = "Image field"
-IMGDLG_GEOMETRY = "Image zoom geometry"
-ENGINE = "Engine"
-IMG_HEIGHT = "Image height"
-IMG_WIDTH = "Image width"
-DEFAULT_ENGINE = "ddg"
-CLOZE_TABLE = "Cloze <table> attributes"
-CLOZE_TD = "Cloze <td> attributes"
-SC_TERM_UP = "Shortcut previous term"
-SC_TERM_DOWN = "Shortcut next term"
-
-# CLOZE NOTE GENERATION
-CLOZE_PROMPT_TERM = 1
-CLOZE_PROMPT_IMAGE = 2
-CLOZE_PROMPTS = [{'prompt': CLOZE_PROMPT_TERM, 'label': 'Term prompt/clozed image(s)'}, {'prompt': CLOZE_PROMPT_IMAGE, 'label': 'Image(s) prompt/clozed term in table'}]
-
-# MISC TEXT/LABELS
-S2N_VER = "1.0"
-S2N_DEBUG_FILENAME = "s2n_error_log.txt"
-S2N_DEBUG_PROMPTEDNAME = "s2n_error_log.prompt"
-S2N_DIR = os.path.dirname(os.path.realpath(__file__))
-S2N_DEBUG_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), S2N_DEBUG_FILENAME)
-S2N_DEBUG_PROMPTED = os.path.join(os.path.dirname(os.path.realpath(__file__)), S2N_DEBUG_PROMPTEDNAME)
-S2N_TITLE = "Search to notes"
-S2N_LABEL = "Create notes from web image search"
-NO_TITLE = "<none>"
-QUERY_LEGEND = '%0: complete term, %1: first tab separated part, ...'
-QUERY_TIP = """<b>QUERY TEMPLATE SYNTAX</b><br>
-Search terms will be split on tab character and %[digit] in the search query substituted with corresponding segments:
-<ul><li>%0 complete term</li>
-</li>%1 first segment (i.e. if no tabs present %1 will be the same as %0)</li>
-<li>%2 second segment</li>
-<li>...</li></ul>
-Any %[digit] without correspoding segments will be stripped from the query.<br>
-<br>
-Example: Search term "a. vertebralis    5" and query "%1 maxn:%2" will result in "a. vertebralis maxn:5" as the searched query.
-"""
-
-###########################################################################
-# Debug
-###########################################################################
-import inspect, os, pprint
-
-s2n_log_fh = None
-def log(msg):
-    global s2n_log_fh
-    tm = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
-    frame = inspect.getouterframes(inspect.currentframe())[1]
-    msg = f"\n{tm} [S2N{S2N_VER}/{os.path.basename(frame.filename)}:{frame.lineno} {frame .function}] {msg}"
-    if not s2n_log_fh:
-        if not os.path.exists(S2N_DEBUG_FILE):
-            msg = msg[1:]
-        s2n_log_fh = open(S2N_DEBUG_FILE, "a")  
-    s2n_log_fh.write(msg)
-
-s2n_log_printer = None
-def pp(obj):
-    global s2n_log_printer
-    if not s2n_log_printer:
-        s2n_log_printer = pprint.PrettyPrinter(indent=4)
-    return s2n_log_printer.pformat(obj)
+    from . import maindialog_qt5 as ui_maindialog, enterdialog_qt5 as ui_enterdialog, imagedialog_qt5 as ui_imagedialog, listdialog_qt5 as ui_listdialog
+from . import imghdr, engine
 
 
-
-###########################################################################
-# List dialog window
-###########################################################################
-class S2N_list_dlg(QDialog):
+class ListDialog(QDialog):
+    """
+    List  dialog window - to input search terms
+    """
     def __init__(self, parent, title, text):
         QDialog.__init__(self, parent)
-        self.ui = list_dlg.Ui_list_dlg()
+        self.ui = ui_listdialog.Ui_ListDialog()
         self.ui.setupUi(self)
         self.setWindowTitle(title)
         self.ui.text.setHtml(text)
@@ -126,47 +38,39 @@ class S2N_list_dlg(QDialog):
         self.setGeometry(dg)
         self.ui.text.verticalScrollBar().move(0, 0)
         self.ui.text.horizontalScrollBar().move(0, 0)
-    
 
-###########################################################################
-# Main dialog window
-###########################################################################
-class S2N_main_dlg(QDialog):
-    ############
-    # Attributes
-    terms = []
-    #[{
-    #   'term': str,
-    #   'query': str,
-    #   'matches': [{
-    #       'title': str,
-    #       'url': str,
-    #       'file': str,
-    #       'selected': bool
-    #   }, ...]
-    # }, ...]
+class Term:
+    """Container class for one search term and its matches"""
+    term = ""
+    query = ""
+    matches: list[Match] = []
 
+class MainDialog(QDialog):
+    """
+    Main window
+    """
+    logger = logging.getLogger('S2N')
+    terms: list[Term] = []
     last_dir = ""
-    tmp_dir = None
+    tmp_dir: str = None
     thumbw = 200
     thumbh = 200
     img_h = -1
     img_w = -1
     cloze_table = ""
     cloze_td = ""
-    engine = None
+    engine: Engine = None
 
-    ###########################################################################
-    # Main dialog window constructor
-    ###########################################################################
     def __init__(self):
-        # Main add-on window
+        """
+        Main add-on window
+        """
         QDialog.__init__(self, mw)
-        self.ui = main_dlg.Ui_main_dlg()
+        self.ui = ui_maindialog.Ui_MainDialog()
         self.ui.setupUi(self)
         self.setWindowTitle(S2N_TITLE)
 
-        # Main add-on window signals & slots
+        # Signals & slots
         self.ui.note.currentTextChanged.connect(self.select_note_type)
         self.ui.enter.clicked.connect(self.enter_terms)
         self.ui.file.clicked.connect(self.select_file)
@@ -191,33 +95,31 @@ class S2N_main_dlg(QDialog):
             self.ui.prompt.addItem(prompt['label'], prompt['prompt'])
 
         # Image zoom window
-        self.image_dlg = QDialog(self)
-        self.image_dlg_ui = image_dlg.Ui_image_dlg()
-        self.image_dlg_ui.setupUi(self.image_dlg)
-        self.image_dlg_ui.gfx.mousePressEvent = self.image_dlg_mousepressevent
+        self.img_dlg = QDialog(self)
+        self.img_dlg_ui = ui_imagedialog.Ui_ImageDialog()
+        self.img_dlg_ui.setupUi(self.img_dlg)
+        self.img_dlg_ui.gfx.mousePressEvent = self.img_dlg_mousepressevent
         sc = QShortcut(QKeySequence('Return'), self.ui.image_lv)
         sc.activated.connect(lambda: self.zoom_image(self.ui.term_lv.currentRow(), self.ui.image_lv.currentRow()) if self.ui.image_lv.hasFocus() else None)
-        sc = QShortcut(QKeySequence('Return'), self.image_dlg)
-        sc.activated.connect(lambda: self.image_dlg.close())
+        sc = QShortcut(QKeySequence('Return'), self.img_dlg)
+        sc.activated.connect(lambda: self.img_dlg.close())
 
         # Load user config and restore states
         self.load_config()
         self.exec()
 
 
-
-
-    ###########################################################################
-    # Main dialog window "destructor" - actual destructor too late
-    ###########################################################################
     def closeEvent(self, event):
+        """
+        Main dialog window "destructor" - actual destructor too late
+        """
         self.save_config()
 
 
-    ###########################################################################
-    # Load configuration from config Dict (from Anki config file normally)
-    ###########################################################################
     def load_config(self):
+        """
+        Load configuration from config Dict (from Anki config file normally)
+        """
         config = mw.addonManager.getConfig(__name__)
         engine = f".{DEFAULT_ENGINE}"
         if config.get(ENGINE):
@@ -263,7 +165,7 @@ class S2N_main_dlg(QDialog):
             if i != -1:
                 self.ui.image.setCurrentIndex(i)
         if config.get(IMGDLG_GEOMETRY):
-            self.image_dlg.restoreGeometry(base64.b64decode(config[IMGDLG_GEOMETRY]))
+            self.img_dlg.restoreGeometry(base64.b64decode(config[IMGDLG_GEOMETRY]))
 
         # Shortcuts
         if config.get(SC_TERM_UP):
@@ -273,12 +175,10 @@ class S2N_main_dlg(QDialog):
             sc = QShortcut(QKeySequence(config[SC_TERM_DOWN]), self)
             sc.activated.connect(lambda: self.ui.term_lv.setCurrentRow(self.ui.term_lv.currentRow() + 1) if self.ui.term_lv.currentRow() < self.ui.term_lv.count() - 1 else None)
 
-
-
-    ###########################################################################
-    # Save current configuration to file
-    ###########################################################################
     def save_config(self):
+        """
+        Save current configuration to file
+        """
         icon_size = self.ui.image_lv.iconSize()
         config = {
             GEOMETRY: base64.b64encode(self.saveGeometry()).decode('utf-8'),
@@ -295,16 +195,15 @@ class S2N_main_dlg(QDialog):
             DIR: self.last_dir,
             TERM: self.ui.term.currentText(),
             IMAGE: self.ui.image.currentText(),
-            IMGDLG_GEOMETRY: base64.b64encode(self.image_dlg.saveGeometry()).decode('utf-8'),
+            IMGDLG_GEOMETRY: base64.b64encode(self.img_dlg.saveGeometry()).decode('utf-8'),
             ENGINE: self.engine.__name__.rsplit('.', 1)[-1]
         }
         mw.addonManager.writeConfig(__name__, config)
 
-
-    ###########################################################################
-    # Clear/reset terms, matches, deleting temporary image files etc.
-    ###########################################################################
     def reset(self):
+        """
+        Clear/reset terms, matches, deleting temporary image files etc.
+        """
         self.ui.image_lv.setEnabled(False)
         self.ui.generate.setEnabled(False)
         for term in self.terms:
@@ -315,13 +214,10 @@ class S2N_main_dlg(QDialog):
         self.ui.term_lv.clear()
         self.ui.image_lv.clear()
 
-
-
-
-    ###########################################################################
-    # Button press to open Open File dialog
-    ###########################################################################
     def select_file(self):
+        """
+        Button press to open Open File dialog
+        """
         (path, filt) = QFileDialog.getOpenFileName(self, "Select file", self.last_dir, "Text files (*.txt)")
         if path:
             with codecs.open(path, encoding='utf-8') as fh:
@@ -330,13 +226,12 @@ class S2N_main_dlg(QDialog):
             self.load_terms(file.split('\n'))
             self.last_dir = os.path.dirname(path)
 
-
-    ###########################################################################
-    # Button press to open edit field to enter/paste terms
-    ###########################################################################
     def enter_terms(self):
+        """
+        Button press to open edit field to enter/paste terms
+        """
         dlg = QDialog(self)
-        ui = enter_dlg.Ui_enter_dlg()
+        ui = ui_enterdialog.Ui_EnterDialog()
         ui.setupUi(dlg)
         sc = QShortcut(QKeySequence('Ctrl+Return'), dlg)
         sc.activated.connect(lambda: dlg.accept())
@@ -350,11 +245,10 @@ class S2N_main_dlg(QDialog):
         if dlg.exec_() == 1:
             self.load_terms(ui.terms.document().toPlainText().split('\n'))
 
-    
-    ###########################################################################
-    # Load list of terms into data structure and setup terms lv
-    ###########################################################################
     def load_terms(self, new_terms):
+        """
+        Load list of terms into data structure and setup terms lv
+        """
         self.reset()
         if new_terms:
             for term in new_terms:
@@ -365,11 +259,10 @@ class S2N_main_dlg(QDialog):
                     self.ui.term_lv.addItem(itm)
             self.set_current_term(self.ui.term_lv.item(0), None)
 
-
-    ###########################################################################
-    # Term selected - store old image selection and setup new
-    ###########################################################################
     def set_current_term(self, current, previous):
+        """
+        Term selected - store old image selection and setup new
+        """
         if self.ui.image_lv.isEnabled():
             # Store previous selection then clear image lv
             self.store_image_selection()
@@ -388,60 +281,60 @@ class S2N_main_dlg(QDialog):
                             self.ui.image_lv.setCurrentRow(0)
                         img_itm.setSelected(match['selected'])
                     else:
-                        print(f">>>>>>>>>>>>>>>>>>>>>No file found for: {match}")
+                        self.logger.warning(f"No file found for: {match}")
                 if self.ui.image_lv.count():
                     self.ui.image_lv.scrollToTop()
                     self.ui.image_lv.setFocus()
                     
 
-    ###########################################################################
-    # Term selected - store old image selection and setup new
-    ###########################################################################
     def store_image_selection(self):
+        """
+        Store image selection
+        """
         for itm in self.ui.image_lv.findItems("*", Qt.MatchWildcard):
             ti = itm.data(TERM_ROLE)
             ii = self.ui.image_lv.row(itm)
             
-            # Sanity check for debug
+            # Sanity checks for debug
             if ti < 0 or ii < 0:
-                log(f"Image_lv index error|ti: {ti}|ii: {ii}|terms: {self.terms}")
+                self.logger.warning(f"Image_lv index error|ti: {ti}|ii: {ii}|terms: {self.terms}")
             elif ti >= len(self.terms):
-                log(f"Image_lv > terms|ti: {ti}|ii: {ii}|terms: {self.terms}")
+                self.logger.warning(f"Image_lv > terms|ti: {ti}|ii: {ii}|terms: {self.terms}")
             elif not 'matches' in self.terms[ti]:
-                log(f"Image_lv != terms|ti: {ti}|ii: {ii}|terms: {self.terms[ti]}")
+                self.logger.warning(f"Image_lv != terms|ti: {ti}|ii: {ii}|terms: {self.terms[ti]}")
             elif ii >= len(self.terms[ti]['matches']):
-                log(f"Image_lv > term matches|ti: {ti}|ii: {ii}|term['matches']: {self.terms[ti]['matches']}")
+                self.logger.warning(f"Image_lv > term matches|ti: {ti}|ii: {ii}|term['matches']: {self.terms[ti]['matches']}")
             elif not 'selected' in self.terms[ti]['matches'][ii]:
-                log(f"Match missing selected|ti: {ti}|ii: {ii}|match: {self.terms[ti]['matches'][ii]}")
+                self.logger.warning(f"Match missing selected|ti: {ti}|ii: {ii}|match: {self.terms[ti]['matches'][ii]}")
             else:
                 self.terms[ti]['matches'][ii]['selected'] = itm.isSelected()
 
-    ###########################################################################
-    # Show zoomed image of supplied term and match index
-    ###########################################################################
     def zoom_image(self, term_index, match_index):
+        """
+        Show zoomed image of supplied term and match index
+        """
         if term_index < self.ui.term_lv.count() and match_index < self.ui.image_lv.count():
-            self.image_dlg.setWindowTitle(self.terms[term_index]['matches'][match_index]['title'])
-            geom = self.image_dlg.geometry()
-            pix = QPixmap(self.terms[term_index]['matches'][match_index]['file']).scaled(geom.width(), geom.height(), Qt.KeepAspectRatio)
-            self.image_dlg_ui.gfx.setPixmap(pix)
-            self.image_dlg.show()
+            self.img_dlg.setWindowTitle(self.terms[term_index].matches[match_index].title)
+            geom = self.img_dlg.geometry()
+            pix = QPixmap(self.terms[term_index].matches[match_index].file).scaled(geom.width(), geom.gheight(), Qt.KeepAspectRatio)
+            self.img_dlg_ui.gfx.setPixmap(pix)
+            self.img_dlg.show()
 
 
-    ###########################################################################
-    # Mouse press handler for image zoom dialog
-    ###########################################################################
-    def image_dlg_mousepressevent(self, event):
+    def img_dlg_mousepressevent(self, event):
+        """
+        Mouse press handler for image zoom dialog
+        """
         if event.button() == Qt.LeftButton or event.button() == Qt.RightButton:
-            self.image_dlg.close()
+            self.img_dlg.close()
         else:
-            super(QLabel, self.image_dlg.gfx).mousePressEvent(event)
+            super(QLabel, self.img_dlg.gfx).mousePressEvent(event)
 
 
-    ###########################################################################
-    # Set available fields to match selected note type
-    ###########################################################################
     def select_note_type(self):
+        """
+        Set available fields to match selected note type
+        """
         note_tid = self.ui.note.currentData()
         note = mw.col.models.get(note_tid)
         fields = mw.col.models.field_names(note)
@@ -465,92 +358,92 @@ class S2N_main_dlg(QDialog):
 
 
 
-    ###########################################################################
-    # Build query from template and terms into terms
-    ###########################################################################
     def build_queries(self, terms, query_template):
+        """
+        Build query from template and terms into terms
+        """
         for term in terms:
             # Replace all %0 with complete term
-            term['query'] = re.sub(r"(?<!%)%0(?!\d)", term['term'], query_template)
+            term.query = re.sub(r"(?<!%)%0(?!\d)", term.term, query_template)
             # Parse term parts and replace corresponding %\d's in query
-            parts = term['term'].split('\t')
+            parts = term.term.split('\t')
             for (i, part) in enumerate(parts):
-                term['query'] = re.sub(rf"(?<!%)%{str(i + 1)}(?!\d)", part, term['query'])
+                term.query = re.sub(rf"(?<!%)%{str(i + 1)}(?!\d)", part, term.query)
             # Eat any remaining %\d's
-            term['query'] = re.sub(r"(?<!%)%\d+", '', term['query'])
+            term.query = re.sub(r"(?<!%)%\d+", '', term.query)
         return terms
 
 
-    ###########################################################################
-    # Run search query and populate term-images
-    ###########################################################################
     def run_query(self):
-        ###############
-        # Function to run network actions in background thread
+        """
+        Run search query and populate term-images
+        """
         def background(col):
+            """
+            Function to run network actions in background thread
+            """
             cnt = 0
             for term in self.terms:
-                term['matches'] = []
-                for search_match in self.engine.search(term['query']):
-                    res = requests.get(search_match['url'], stream = True)
+                term.matches = []
+                for match in self.engine.search(term.query):
+                    res = requests.get(match.url, stream = True)
                     if res.status_code == 200:
                         res.raw.decode_content = True
                         ext = imghdr.what('', h=res.content)
                         if ext:
                             ext = f".{ext}"
                         else:
-                            print(f">>>>>>>>>>>>>>Unable to detect image type for {search_match['url']}")
+                            self.logger.warning(f"Unable to detect image type for {match.url}")
                             ext = ".jpeg"
-                        tmp_file = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
-                        tmp_file.file.write(res.content)
+                        tmp = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
+                        tmp.file.write(res.content)
                         # Debug sanity check
-                        if not ('title' in search_match and 'url' in search_match and 'height' in search_match and 'width' in search_match):
-                            log(f"Search match key error|search_match: {search_match}")
+                        if match.title == None or match.url == None:
+                            self.logger.warning(f"Search match key error|match: {match}")
                         else:
-                            term['matches'].append({'title': search_match['title'], 'url': search_match['url'], 'height': search_match['height'], 'width': search_match['width'], 'file': tmp_file.name, 'selected': False})
+                            match.file = tmp.name
+                            term.matches.append(match)
                         cnt += 1
                     else:
-                        log(f"Non-200 return|search_match: {search_match}")
+                        self.logger.info(f"Non-200 return|match: {match}")
 
             return type('obj', (object,), {'changes' : collection.OpChanges, 'count': cnt})()
 
-        ###############
-        # Run when background thread finishes - update GUI
         def finished(result):
+            """
+            Run when background thread finishes - update GUI
+            """
             self.ui.generate.setEnabled(True)
             if self.ui.term_lv.currentRow() == 0:
                 self.ui.term_lv.setCurrentRow(-1)
             self.ui.image_lv.setEnabled(True)
             self.ui.term_lv.setCurrentRow(0)
 
-        ###############
         # Root run_query code
         if self.tmp_dir:
             self.tmp_dir.cleanup()
         self.tmp_dir = tempfile.TemporaryDirectory()
         if len(self.terms):
             self.terms = self.build_queries(self.terms, self.ui.query_tpl.text())
-            queries = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
+            html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
             for term in self.terms:
-                queries += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term["term"]}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term["query"]}</td></tr>'
-            queries += '</table>'
+                html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query}</td></tr>'
+            html += '</table>'
 
-            dlg = S2N_list_dlg(self, "Run search query", queries)
+            dlg = ListDialog(self, "Run search query", html)
             dlg.ui.buttonBox.addButton(QDialogButtonBox.Cancel)
             if dlg.exec() == 1:
-                bgop = CollectionOp(parent=mw, op=background)
-                bgop.success(finished)
-                bgop.failure(finished)
-                bgop.run_in_background()
-    #           QueryOp(parent=self, op=lambda col: background_query(self, self.ui.query_tpl.text())).success(background_query_finished).with_progress().run_in_background() # Doesn't work until 2.1.50
+                #bgop = CollectionOp(parent=mw, op=background)
+                #bgop.success(finished)
+                #bgop.failure(finished)
+                #bgop.run_in_background()
+                QueryOp(parent=self, op=lambda col: background(self, self.ui.query_tpl.text())).success(finished).with_progress().run_in_background() # Doesn't work until 2.1.50
 
 
-
-
-    ###########################################################################
-    # Generate notes from term-images
-    ###########################################################################
     def generate_notes(self):
+        """
+        Generate notes from term-images
+        """
         self.store_image_selection() # To store last selections
         deck = self.ui.deck.currentData()
         note_type_id = self.ui.note.currentData()
@@ -559,79 +452,97 @@ class S2N_main_dlg(QDialog):
         image_fld = self.ui.image.currentText()
         title = self.ui.title.text()
 
-        ###############
-        # Function for running note generation in background thread
         def background(col):
-             # Calculate how to scale image
-            def scale_img(cw, ch, w, h):
-                if (cw < 0 or w <= cw) and (ch < 0 or h <= ch):
+            """
+            Function for running note generation in background thread
+            """
+            def scale_img(match: Match):
+                """
+                Calculate how to scale image
+                """
+                if match.height == -1 or match.width == -1:
+                    # get h/w from file
+                    pass
+                if (self.img_w < 0 or match.width <= self.img_w) and (self.img_h < 0 or match.height <= self.img_h):
                     return None
-                rw = cw/w
-                rh = ch/h
-                return (cw, h*rw) if rw < rh else (w*rh, ch)
-
-            note_type = col.models.get(note_type_id)
-            cnt = 0
-            skipped = []
-            changes = collection.OpChanges
-
-            # Generate cloze style note
-            if note_type['type'] == consts.MODEL_CLOZE:
-                if self.terms:
-                    content = ""
-                    for term in self.terms:
-                        s_matches = []
-                        images = ""
-                        for match in term['matches']:
-                            if(match['selected']):
-                                s_matches.append(match)
-                        if s_matches:
-                            cnt += 1
-                            for match in s_matches:
-                                file = mw.col.media.add_file(match['file'])
-                                dim = scale_img(self.img_w, self.img_h, match['width'], match['height'])
-                                dim = f' width="{dim[0]}" height="{dim[1]}"' if dim else ""
-                                images += f'<img src="{file}"{dim}><br>'                            
-                            if prompt == CLOZE_PROMPT_TERM:
-                                content += f'{term["term"]}: {{{{c{str(cnt)}::{images[:-4]}}}}}<br>'
-                            else:
-                                content += f'<tr><td {self.cloze_td}>{images[:-4]}</td><td {self.cloze_td}>{{{{c{str(cnt)}::{term["term"]}}}}}</td></tr>'
-                        else: # No matches or no selected matches
-                            skipped.append(term['term'])
-                    if content:
-                        note = mw.col.new_note(note_type)
-                        if prompt == CLOZE_PROMPT_IMAGE:
-                            content = f"<table {self.cloze_table}>{content}</table>"
-                        if term_fld != NO_TITLE:
-                            note[term_fld] = title
-                        note[image_fld] = content
-                        changes = mw.col.add_note(note, deck)
-
-            # Generate regular style note
-            else:
+                rw = self.img_w/match.width
+                rh = self.img_h/match.height
+                return (self.img_w, match.height*rw) if rw < rh else (match.width*rh, self.img_h)
+            
+            def clozes(terms: list[Term], note_t):
+                """
+                Generate cloze type note from terms
+                """
+                content = ""
+                cnt = 0
+                changes = []
+                skipped = []
                 for term in self.terms:
-                    if term['matches']:
+                    if matches := [m for m in term.matches if m.selected]:
+                        cnt += 1
+                        images = ""
+                        for match in matches:
+                            file = mw.col.media.add_file(match.file)
+                            dim = scale_img(match)
+                            dim = f' width="{dim[0]}" height="{dim[1]}"' if dim else ""
+                            images += f'<img src="{file}"{dim}><br>'                            
+                        if prompt == CLOZE_PROMPT_TERM:
+                            content += f'{term.term}: {{{{c{str(cnt)}::{images[:-4]}}}}}<br>'
+                        else:
+                            content += f'<tr><td {self.cloze_td}>{images[:-4]}</td><td {self.cloze_td}>{{{{c{cnt}::{term.term}}}}}</td></tr>'
+                    else: # No matches or no selected matches
+                        skipped.append(term.term)
+                if content:
+                    note = mw.col.new_note(note_t)
+                    if prompt == CLOZE_PROMPT_IMAGE:
+                        content = f"<table {self.cloze_table}>{content}</table>"
+                    if term_fld != NO_TITLE:
+                        note[term_fld] = title
+                    note[image_fld] = content
+                    # Fixme: correct way to store changes
+                    changes.append(mw.col.add_note(note, deck))
+                
+                return (cnt, changes, skipped)
+
+            def standards(terms: list[Term], note_t):
+                """Generate standard notes from terms"""
+                cnt = 0
+                changes = []
+                skipped = []
+                for term in self.terms:
+                    if term.matches:
                         note = mw.col.new_note(note_type)
-                        note[term_fld] = term['term']
-                        for match in term['matches']:
-                            if(match['selected']):
-                                file = mw.col.media.add_file(match['file'])
-                                dim = scale_img(self.img_w, self.img_h, match['width'], match['height'])
+                        note[term_fld] = term.term
+                        for match in term.matches:
+                            if match.selected:
+                                file = mw.col.media.add_file(match.file)
+                                dim = scale_img(match)
                                 dim = f' width="{dim[0]}" height="{dim[1]}"' if dim else ""
                                 note[image_fld] += f'<img src="{file}"{dim}>'
                         if note[image_fld]:
-                            changes = mw.col.add_note(note, deck)
+                            # Fixme: correct way to store changes
+                            changes.append(mw.col.add_note(note, deck))
                             cnt += 1
                         else:  # No selected matches for term
-                            skipped.append(term['term'])
+                            skipped.append(term.term)
                     else: # No matches for term
-                        skipped.append(term['term'])
+                        skipped.append(term.term)
+                
+                return (cnt, changes, skipped)
 
-            return type('obj', (object,), {'changes' : changes, 'skipped': skipped, 'count': cnt, 'note_type': note_type['type']})()
+            ###
+            note_type = col.models.get(note_type_id)
+            if note_type['type'] == consts.MODEL_CLOZE:
+                (cnt, changes, skipped) = clozes(self.terms, note_type)
+            else:
+                (cnt, changes, skipped) = standards(self.terms, note_type)
+
+            return type('obj', (object,), {'changes' : collection.OpChanges, 'skipped': skipped, 'count': cnt, 'note_type': note_type['type']})()
         
-        ###########################################################################
-        # Run when background thread finishes - show result
         def finished(result):
+            """
+            Run when background thread finishes - show result
+            """
             note_str = "cloze" if result.note_type == consts.MODEL_CLOZE else "note"
             msg = f'<b>Note generation finished</b><br>{result.count} {note_str}(s) generated.</div>'
             if result.skipped:
@@ -641,15 +552,13 @@ class S2N_main_dlg(QDialog):
                     msg += f"{term}<br>\n"
                     skipped += f"{term}\n"
                     skipped.rstrip()
-            dlg = S2N_list_dlg(self, S2N_TITLE, msg)
+            dlg = ListDialog(self, S2N_TITLE, msg)
             if result.skipped:
                 copy = dlg.ui.buttonBox.addButton('Copy skipped to clipboard', QDialogButtonBox.ButtonRole.ApplyRole)
                 copy.clicked.connect(lambda: QApplication.clipboard().setText(skipped))
             dlg.exec()
 
-        ###############
-        # Root generate_notes code
-        # Run note generation in background thread, get Qt info before bg thread launch
+        ###
         bgop = CollectionOp(parent=mw, op=background)
         bgop.success(finished)
         bgop.failure(finished)
@@ -659,9 +568,8 @@ class S2N_main_dlg(QDialog):
 
 ###########################################################################
 # Add on start up
-###########################################################################
 action = QAction(S2N_LABEL, mw)
-action.triggered.connect(lambda: S2N_main_dlg())
+action.triggered.connect(lambda: MainDialog())
 mw.form.menuTools.addAction(action)
 
 # Ask user to post debug log 

@@ -4,7 +4,7 @@
         {
             "label": "Create output dirs",
             "type": "shell",
-            "command": "Write-host Creating output directories... ; md -Force ./bin, ./dist | Out-Null",
+            "command": "Write-host Creating output directories... ; md -Force ./bin, ./bin/engines, ./dist | Out-Null",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -53,9 +53,27 @@
             }
         },
         {
+            "label": "Build UI",
+            "type": "shell",
+            "command": "Write-host Building UI... ; conda activate anki; ls ./src/py/*.ui | %{pyuic5 -o \"./src/py/$($_.BaseName)_qt5.py\" \"$_.FullName\"; pyuic6 -o \"./src/py/$($_.BaseName)_qt6.py\" \"$_.FullName\"}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        },
+        {
             "label": "Build PY",
             "type": "shell",
-            "command": "Write-host Building PY... ; ls ./src/py/*.py | ? { -not (Test-Path ('./bin/' + $_.Name) -PathType Leaf) -or (Test-Path ('./bin/' + $_.Name) -OlderThan $_.LastWriteTime) } | % {$_.FullName} | cp -ea 0 -Force -Destination ./bin | Out-Null",
+            "command": "Write-host Building PY... ; ls ./src/py/*.py | ? { -not (Test-Path ('./bin/' + $_.Name) -PathType Leaf) -or (Test-Path ('./bin/' + $_.Name) -OlderThan $_.LastWriteTime) } | % {$_.FullName} | cp -ea 0 -Force -Destination ./bin | Out-Null; ls ./src/py/engines/*.py | ? { -not (Test-Path ('./bin/engines' + $_.Name) -PathType Leaf) -or (Test-Path ('./bin/engines' + $_.Name) -OlderThan $_.LastWriteTime) } | % {$_.FullName} | cp -ea 0 -Force -Destination ./bin/engines | Out-Null",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
