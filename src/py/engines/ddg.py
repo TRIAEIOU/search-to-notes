@@ -10,7 +10,7 @@ Additional modifier maxn:\d implemented
 
 import requests, re, json, time
 from logging import Logger
-from .. import engine
+from . import engine
 
 _URL = 'https://duckduckgo.com/'
 

@@ -8,15 +8,19 @@ from aqt.qt import *
 from aqt.utils import *
 from aqt.operations import CollectionOp, QueryOp
 from anki import consts, collection
+from .engines import engine
 from .consts import *
-from .engine import *
+from .engines.engine import *
+from .ankiutils import *
 
 if qtmajor == 6:
     from . import maindialog_qt6 as ui_maindialog, enterdialog_qt6 as ui_enterdialog, imagedialog_qt6 as ui_imagedialog, listdialog_qt6 as ui_listdialog
 elif qtmajor == 5:
     from . import maindialog_qt5 as ui_maindialog, enterdialog_qt5 as ui_enterdialog, imagedialog_qt5 as ui_imagedialog, listdialog_qt5 as ui_listdialog
-from . import imghdr, engine
+from . import imghdr
 
+CVER = get_version()
+NVER = "1.1.0"
 
 class ListDialog(QDialog):
     """
@@ -68,7 +72,7 @@ class MainDialog(QDialog):
         QDialog.__init__(self, mw)
         self.ui = ui_maindialog.Ui_MainDialog()
         self.ui.setupUi(self)
-        self.setWindowTitle(S2N_TITLE)
+        self.setWindowTitle(TITLE)
 
         # Signals & slots
         self.ui.note.currentTextChanged.connect(self.select_note_type)
@@ -552,7 +556,7 @@ class MainDialog(QDialog):
                     msg += f"{term}<br>\n"
                     skipped += f"{term}\n"
                     skipped.rstrip()
-            dlg = ListDialog(self, S2N_TITLE, msg)
+            dlg = ListDialog(self, TITLE, msg)
             if result.skipped:
                 copy = dlg.ui.buttonBox.addButton('Copy skipped to clipboard', QDialogButtonBox.ButtonRole.ApplyRole)
                 copy.clicked.connect(lambda: QApplication.clipboard().setText(skipped))
@@ -568,12 +572,18 @@ class MainDialog(QDialog):
 
 ###########################################################################
 # Add on start up
-action = QAction(S2N_LABEL, mw)
+action = QAction(LABEL, mw)
 action.triggered.connect(lambda: MainDialog())
 mw.form.menuTools.addAction(action)
 
+if strvercmp(CVER, NVER) < 0:
+    set_version(NVER)
+
+sys.path.append(DIR)
+load()
+
 # Ask user to post debug log 
-if os.path.exists(S2N_DEBUG_FILE) and (not os.path.exists(S2N_DEBUG_PROMPTED) or os.path.getmtime(S2N_DEBUG_FILE) > os.path.getmtime(S2N_DEBUG_PROMPTED)):
-    showInfo(f'Search to notes add-on has detected an error log, consider reviewing it for any privacy concerns and then post the contents to the add-on support thread (https://forums.ankiweb.net/t/search-to-notes-support-thread/16286) to help the author and other users. The debuglog can be found here: "{S2N_DEBUG_FILE}".')
-    with open(S2N_DEBUG_PROMPTED, "w") as fh:
-        fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(S2N_DEBUG_FILE)))))
+if os.path.exists(DEBUG_FILE) and (not os.path.exists(DEBUG_PROMPTED) or os.path.getmtime(DEBUG_FILE) > os.path.getmtime(DEBUG_PROMPTED)):
+    showInfo(f'Search to notes add-on has detected an error log, consider reviewing it for any privacy concerns and then post the contents to the add-on support thread (https://forums.ankiweb.net/t/search-to-notes-support-thread/16286) to help the author and other users. The debuglog can be found here: "{DEBUG_FILE}".')
+    with open(DEBUG_PROMPTED, "w") as fh:
+        fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(DEBUG_FILE)))))

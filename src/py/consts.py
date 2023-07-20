@@ -33,14 +33,14 @@ CLOZE_PROMPT_IMAGE = 2
 CLOZE_PROMPTS = [{'prompt': CLOZE_PROMPT_TERM, 'label': 'Term prompt/clozed image(s)'}, {'prompt': CLOZE_PROMPT_IMAGE, 'label': 'Image(s) prompt/clozed term in table'}]
 
 # MISC TEXT/LABELS
-S2N_VER = "1.0"
-S2N_DEBUG_FILENAME = "s2n_error_log.txt"
-S2N_DEBUG_PROMPTEDNAME = "s2n_error_log.prompt"
-S2N_DIR = os.path.dirname(os.path.realpath(__file__))
-S2N_DEBUG_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), S2N_DEBUG_FILENAME)
-S2N_DEBUG_PROMPTED = os.path.join(os.path.dirname(os.path.realpath(__file__)), S2N_DEBUG_PROMPTEDNAME)
-S2N_TITLE = "Search to notes"
-S2N_LABEL = "Create notes from web image search"
+DEBUG_FILENAME = "s2n_error_log.txt"
+DEBUG_PROMPTEDNAME = "s2n_error_log.prompt"
+DIR = os.path.dirname(os.path.realpath(__file__))
+ENGINES_DIR = os.path.join(DIR, "engines")
+DEBUG_FILE = os.path.join(DIR, DEBUG_FILENAME)
+DEBUG_PROMPTED = os.path.join(DIR, DEBUG_PROMPTEDNAME)
+TITLE = "Search to notes"
+LABEL = "Create notes from web image search"
 NO_TITLE = "<none>"
 QUERY_LEGEND = '%0: complete term, %1: first tab separated part, ...'
 QUERY_TIP = """<b>QUERY TEMPLATE SYNTAX</b><br>

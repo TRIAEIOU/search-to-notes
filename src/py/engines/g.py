@@ -1,7 +1,7 @@
-import pip._vendor.requests as requests, re, json, time
+import requests, re, json, time
 from logging import Logger
 from bs4 import BeautifulSoup
-from .. import engine
+from . import engine
 
 class Google(engine.Engine):
     """Google search engine (BeautifulSoup) implementation"""
