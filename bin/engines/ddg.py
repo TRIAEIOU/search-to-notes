@@ -1,6 +1,6 @@
 """
-DuckDuckGo search engine: Credit to Deepan (https://github.com/deepanprabhu)
-for the DDG api implemenation: https://github.com/deepanprabhu/duckduckgo-images-api
+DuckDuckGo search engine: Credit to [Deepan](https://github.com/deepanprabhu)
+and [deedy5](https://github.com/deedy5) for the DDG api implementation
 
 NOTES
 https://help.duckduckgo.com/duckduckgo-help-pages/results/syntax/ doesn't
@@ -10,13 +10,16 @@ Additional modifier maxn:\d implemented
 
 import requests, re, json, time
 from logging import Logger
-from . import engine
-
+from . import *
 _URL = 'https://duckduckgo.com/'
 
-class DDG(engine.Engine):
+class DDG(Engine):
     """DDG search engine implementation"""
-    def init(self, logger: Logger):
+    @staticmethod
+    def title():
+        return "DuckDuckGo (API)"
+
+    def __init__(self, logger: Logger):
         self.logger = logger
 
     def legend(self):
@@ -34,7 +37,8 @@ class DDG(engine.Engine):
 <li>maxn:10 => Only first 10 results (default all)</li></ul>"""
 
     def search(self, query: str):
-        result = []
+
+        result: list[Match] = []
         # Parse max no of matches                
         maxn = -1
         maxn_match = re.fullmatch(r"(^|(.*?)\s)maxn:(\d+)($|(\s.*))", query)
@@ -42,15 +46,9 @@ class DDG(engine.Engine):
             maxn = int(maxn_match.group(3))
             query = maxn_match.group(2) if maxn_match.group(2) else ""
             query += maxn_match.group(5) if maxn_match.group(5) else ""
-        params = { 'q': query }
-        post = requests.post(_URL, data=params)
-        res = re.search(r'vqd=([\d-]+)\&', post.text, re.M | re.I)
-        if not res:
-            return None
-        vqd = res.group(1)
 
         headers = {
-            'authority': 'duckduckgo.com',
+           'authority': 'duckduckgo.com',
             'accept': 'application/json, text/javascript, */*; q=0.01',
             'sec-fetch-dest': 'empty',
             'x-requested-with': 'XMLHttpRequest',
@@ -58,33 +56,75 @@ class DDG(engine.Engine):
             'sec-fetch-site': 'same-origin',
             'sec-fetch-mode': 'cors',
             'referer': 'https://duckduckgo.com/',
-            'accept-language': 'en-US,en;q=0.9',
+            'accept-language': 'en-US,en;q=0.9' 
         }
-        params = (
-            ('l', 'us-en'),
-            ('o', 'json'),
-            ('q', query),
-            ('vqd', vqd),
-            ('f', ',,,'),
-            ('p', '1'),
-            ('v7exp', 'a'),
+        
+        _ = {
+            'authority': 'duckduckgo.com',
+            'accept': 'application/json, text/javascript, */*; q=0.01', #"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-language": "en-US,en;q=0.9,hi;q=0.8",
+            "cache-control": "max-age=0",
+            "sec-ch-ua": "\"Google Chrome\";v=\"113\", \"Chromium\";v=\"113\", \"Not-A.Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-user": "?1",
+            "sec-gpc": "1",
+            "upgrade-insecure-requests": "1",
+            "cookie": "p=-2; ah=us-en; l=us-en",
+            "Referer": "https://duckduckgo.com/",
+            "Referrer-Policy": "origin"
+        }
+    
+        # Get vqd token for the search
+        res = requests.get(
+            f'{_URL}/?va=f&t=hg&q={query}&iax=images&ia=images',
+            headers=headers
         )
+        print(f'token res: {res.text}')
+        if res and (m := re.match(
+            r'.*?vqd=([\'"]?)(.*?)(?:[\'"&].*|$)',
+            res.text
+        )):
+            vqd = m.group(2)
+        else:
+            print("no vqd matched")
+            return None
+
+        params = {
+            'l': 'wt-wt', # region wt-wt: no region
+            #'l': 'us-en', # region
+            'o': 'json', # output
+            #'s': 0,
+            'q': query, # query
+            'vqd': vqd, # vqd-session
+            'f': ',,,', # filters f"{timelimit},{size},{color},{type_image},{layout},{license_image}
+            'p': -1, # safe-search off
+            'v7exp': 'a' # ?
+        }
         request = _URL + "i.js"
         while True:
-            while True:
+            data = None
+            for _ in range(3):
                 try:
-                    res = requests.get(request, headers=headers, params=params)
+                    print(f'query: {request}, headers: {headers}, params: {params}')
+                    res = requests.get(url=request, headers=headers, params=params)
+                    print(f'res: {res}')
                     data = json.loads(res.text)
                     break
                 except ValueError as e:
                     time.sleep(1)
+            if data is None:
+                return None
             for item in data['results']:
-                result.append({
-                    'title': item['title'],
-                    'url' : item['image'],
-                    'width': item['width'],
-                    'height': item['height']
-                })
+                result.append(Match(
+                    title=item['title'],
+                    url=item['image'],
+                    width=item['width'],
+                    height=item['height']
+                ))
                 maxn -= 1
                 if maxn == 0:
                     break

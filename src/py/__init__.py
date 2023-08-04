@@ -8,9 +8,8 @@ from aqt.qt import *
 from aqt.utils import *
 from aqt.operations import CollectionOp, QueryOp
 from anki import consts, collection
-from .engines import engine
 from .consts import *
-from .engines.engine import *
+from .engines import *
 from .ankiutils import *
 
 if qtmajor == 6:
@@ -43,11 +42,7 @@ class ListDialog(QDialog):
         self.ui.text.verticalScrollBar().move(0, 0)
         self.ui.text.horizontalScrollBar().move(0, 0)
 
-class Term:
-    """Container class for one search term and its matches"""
-    term = ""
-    query = ""
-    matches: list[Match] = []
+
 
 class MainDialog(QDialog):
     """
@@ -125,10 +120,7 @@ class MainDialog(QDialog):
         Load configuration from config Dict (from Anki config file normally)
         """
         config = mw.addonManager.getConfig(__name__)
-        engine = f".{DEFAULT_ENGINE}"
-        if config.get(ENGINE):
-            engine = f".{config[ENGINE]}"
-        self.engine = importlib.import_module(engine, package=__name__)
+        self.engine = engines.get(config.get(ENGINE, DEFAULT_ENGINE), DEFAULT_ENGINE)(self.logger)
         self.ui.query_legend.setText(QUERY_LEGEND + (f', {self.engine.legend()}' if self.engine.legend() else ''))
         self.ui.query_tpl.setToolTip(QUERY_TIP + (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else ''))
 
@@ -143,11 +135,11 @@ class MainDialog(QDialog):
         if config.get(QUERY_TEMPLATE):
             self.ui.query_tpl.setText(config[QUERY_TEMPLATE])
         if config.get(DECK):
-            i = self.ui.deck.findData(config[DECK], flags=Qt.MatchExactly)
+            i = self.ui.deck.findData(config[DECK], flags=Qt.MatchFlag.MatchExactly)
             if i != -1:
                 self.ui.deck.setCurrentIndex(i)
         if config.get(NOTE):
-            i = self.ui.note.findData(config[NOTE], flags=Qt.MatchExactly)
+            i = self.ui.note.findData(config[NOTE], flags=Qt.MatchFlag.MatchExactly)
             if i != -1:
                 self.ui.note.setCurrentIndex(i)
         if config.get(IMG_HEIGHT):
@@ -200,7 +192,7 @@ class MainDialog(QDialog):
             TERM: self.ui.term.currentText(),
             IMAGE: self.ui.image.currentText(),
             IMGDLG_GEOMETRY: base64.b64encode(self.img_dlg.saveGeometry()).decode('utf-8'),
-            ENGINE: self.engine.__name__.rsplit('.', 1)[-1]
+            ENGINE: self.engine.title()
         }
         mw.addonManager.writeConfig(__name__, config)
 
@@ -210,10 +202,6 @@ class MainDialog(QDialog):
         """
         self.ui.image_lv.setEnabled(False)
         self.ui.generate.setEnabled(False)
-        for term in self.terms:
-            for match in term['matches']:
-                if match.get('file') and os.path.exists(match['file']):
-                    os.remove(match['file'])
         self.terms.clear()
         self.ui.term_lv.clear()
         self.ui.image_lv.clear()
@@ -237,31 +225,20 @@ class MainDialog(QDialog):
         dlg = QDialog(self)
         ui = ui_enterdialog.Ui_EnterDialog()
         ui.setupUi(dlg)
-        sc = QShortcut(QKeySequence('Ctrl+Return'), dlg)
-        sc.activated.connect(lambda: dlg.accept())
-
-        tmp = ""
-        for term in self.terms:
-            tmp = f"{tmp}{term['term']}\n"
-        tmp.rstrip()
-        ui.terms.document().setPlainText(tmp)
-        dlg.show()
-        if dlg.exec_() == 1:
+        QShortcut(QKeySequence('Ctrl+Return'), dlg).activated.connect(lambda: dlg.accept())
+        ui.terms.document().setPlainText("\n".join([t.term for t in self.terms]))
+        if dlg.exec() == 1:
             self.load_terms(ui.terms.document().toPlainText().split('\n'))
 
-    def load_terms(self, new_terms):
+    def load_terms(self, new_terms: list[str]):
         """
         Load list of terms into data structure and setup terms lv
         """
         self.reset()
-        if new_terms:
-            for term in new_terms:
-                sterm = term.strip()
-                if sterm:
-                    self.terms.append({'term': sterm, 'query': '', 'matches': []})
-                    itm = QListWidgetItem(sterm)
-                    self.ui.term_lv.addItem(itm)
-            self.set_current_term(self.ui.term_lv.item(0), None)
+        for term in [t.strip() for t in new_terms if t]:
+            self.terms.append(Term(term=term))
+            self.ui.term_lv.addItem(term)
+        self.set_current_term(self.ui.term_lv.item(0), None)
 
     def set_current_term(self, current, previous):
         """
@@ -273,17 +250,17 @@ class MainDialog(QDialog):
             self.ui.image_lv.clear()
 
             if current: # If new selected term setup image lv
-                index = self.ui.term_lv.row(current)
-                for (i, match) in enumerate(self.terms[index]['matches']):
-                    if match.get('file'):
-                        img_itm = QListWidgetItem(match['title'])
-                        img_itm.setData(TERM_ROLE, index)
-                        img_itm.setIcon(QIcon(match['file']))
-                        img_itm.setToolTip(match['url'])
+                i = self.ui.term_lv.row(current)
+                for (ii, match) in enumerate(self.terms[i].matches):
+                    if match.file:
+                        img_itm = QListWidgetItem(match.title)
+                        img_itm.setData(TERM_ROLE, i)
+                        img_itm.setIcon(QIcon(match.file))
+                        img_itm.setToolTip(match.url)
                         self.ui.image_lv.addItem(img_itm)
-                        if i == 0: # Needs to be done before setSeleced to avoid toggle
+                        if ii == 0: # Needs to be done before setSeleced to avoid toggle
                             self.ui.image_lv.setCurrentRow(0)
-                        img_itm.setSelected(match['selected'])
+                        img_itm.setSelected(match.selected)
                     else:
                         self.logger.warning(f"No file found for: {match}")
                 if self.ui.image_lv.count():
@@ -304,14 +281,10 @@ class MainDialog(QDialog):
                 self.logger.warning(f"Image_lv index error|ti: {ti}|ii: {ii}|terms: {self.terms}")
             elif ti >= len(self.terms):
                 self.logger.warning(f"Image_lv > terms|ti: {ti}|ii: {ii}|terms: {self.terms}")
-            elif not 'matches' in self.terms[ti]:
-                self.logger.warning(f"Image_lv != terms|ti: {ti}|ii: {ii}|terms: {self.terms[ti]}")
-            elif ii >= len(self.terms[ti]['matches']):
-                self.logger.warning(f"Image_lv > term matches|ti: {ti}|ii: {ii}|term['matches']: {self.terms[ti]['matches']}")
-            elif not 'selected' in self.terms[ti]['matches'][ii]:
-                self.logger.warning(f"Match missing selected|ti: {ti}|ii: {ii}|match: {self.terms[ti]['matches'][ii]}")
+            elif ii >= len(self.terms[ti].matches):
+                self.logger.warning(f"Image_lv > term matches|ti: {ti}|ii: {ii}|term.matches: {self.terms[ti].matches}")
             else:
-                self.terms[ti]['matches'][ii]['selected'] = itm.isSelected()
+                self.terms[ti].matches[ii].selected = itm.isSelected()
 
     def zoom_image(self, term_index, match_index):
         """
@@ -320,8 +293,10 @@ class MainDialog(QDialog):
         if term_index < self.ui.term_lv.count() and match_index < self.ui.image_lv.count():
             self.img_dlg.setWindowTitle(self.terms[term_index].matches[match_index].title)
             geom = self.img_dlg.geometry()
-            pix = QPixmap(self.terms[term_index].matches[match_index].file).scaled(geom.width(), geom.gheight(), Qt.KeepAspectRatio)
-            self.img_dlg_ui.gfx.setPixmap(pix)
+            self.img_dlg_ui.gfx.setPixmap(
+                QPixmap(self.terms[term_index].matches[match_index].file)
+                .scaled(geom.width(), geom.height(), Qt.KeepAspectRatio)
+            )
             self.img_dlg.show()
 
 
@@ -360,56 +335,44 @@ class MainDialog(QDialog):
         self.ui.term.addItems(fields)
         self.ui.image.addItems(fields)
 
-
-
-    def build_queries(self, terms, query_template):
-        """
-        Build query from template and terms into terms
-        """
-        for term in terms:
-            # Replace all %0 with complete term
-            term.query = re.sub(r"(?<!%)%0(?!\d)", term.term, query_template)
-            # Parse term parts and replace corresponding %\d's in query
-            parts = term.term.split('\t')
-            for (i, part) in enumerate(parts):
-                term.query = re.sub(rf"(?<!%)%{str(i + 1)}(?!\d)", part, term.query)
-            # Eat any remaining %\d's
-            term.query = re.sub(r"(?<!%)%\d+", '', term.query)
-        return terms
-
-
     def run_query(self):
         """
         Run search query and populate term-images
         """
-        def background(col):
+        def background(col, template):
             """
             Function to run network actions in background thread
             """
             cnt = 0
             for term in self.terms:
                 term.matches = []
-                for match in self.engine.search(term.query):
-                    res = requests.get(match.url, stream = True)
-                    if res.status_code == 200:
-                        res.raw.decode_content = True
-                        ext = imghdr.what('', h=res.content)
-                        if ext:
-                            ext = f".{ext}"
+                matches = self.engine.search(term.query(template))
+                if matches is None:
+                    msg = f'{self.engine.title()} search for "{term.query(template)}" returned None'
+                    self.logger.warning(msg)
+                    raise Exception(msg)
+                else:
+                    for match in matches:
+                        res = requests.get(match.url, stream = True)
+                        if res.status_code == 200:
+                            res.raw.decode_content = True
+                            ext = imghdr.what('', h=res.content)
+                            if ext:
+                                ext = f".{ext}"
+                            else:
+                                self.logger.warning(f"Unable to detect image type for {match.url}")
+                                ext = ".jpeg"
+                            tmp = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
+                            tmp.file.write(res.content)
+                            # Debug sanity check
+                            if match.title == None or match.url == None:
+                                self.logger.warning(f"Search match key error|match: {match}")
+                            else:
+                                match.file = tmp.name
+                                term.matches.append(match)
+                            cnt += 1
                         else:
-                            self.logger.warning(f"Unable to detect image type for {match.url}")
-                            ext = ".jpeg"
-                        tmp = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
-                        tmp.file.write(res.content)
-                        # Debug sanity check
-                        if match.title == None or match.url == None:
-                            self.logger.warning(f"Search match key error|match: {match}")
-                        else:
-                            match.file = tmp.name
-                            term.matches.append(match)
-                        cnt += 1
-                    else:
-                        self.logger.info(f"Non-200 return|match: {match}")
+                            self.logger.info(f"Non-200 return|match: {match}")
 
             return type('obj', (object,), {'changes' : collection.OpChanges, 'count': cnt})()
 
@@ -418,30 +381,28 @@ class MainDialog(QDialog):
             Run when background thread finishes - update GUI
             """
             self.ui.generate.setEnabled(True)
-            if self.ui.term_lv.currentRow() == 0:
-                self.ui.term_lv.setCurrentRow(-1)
+            if self.ui.term_lv.currentRow() == 0: self.ui.term_lv.setCurrentRow(-1)
             self.ui.image_lv.setEnabled(True)
             self.ui.term_lv.setCurrentRow(0)
 
         # Root run_query code
-        if self.tmp_dir:
-            self.tmp_dir.cleanup()
+        if self.tmp_dir: self.tmp_dir.cleanup()
         self.tmp_dir = tempfile.TemporaryDirectory()
+        template = self.ui.query_tpl.text()
         if len(self.terms):
-            self.terms = self.build_queries(self.terms, self.ui.query_tpl.text())
             html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
             for term in self.terms:
-                html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query}</td></tr>'
+                html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query(template)}</td></tr>'
             html += '</table>'
 
             dlg = ListDialog(self, "Run search query", html)
-            dlg.ui.buttonBox.addButton(QDialogButtonBox.Cancel)
+            dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
             if dlg.exec() == 1:
                 #bgop = CollectionOp(parent=mw, op=background)
                 #bgop.success(finished)
                 #bgop.failure(finished)
                 #bgop.run_in_background()
-                QueryOp(parent=self, op=lambda col: background(self, self.ui.query_tpl.text())).success(finished).with_progress().run_in_background() # Doesn't work until 2.1.50
+                QueryOp(parent=self, op=lambda col: background(self, template), success=finished).with_progress().run_in_background()
 
 
     def generate_notes(self):
@@ -464,9 +425,6 @@ class MainDialog(QDialog):
                 """
                 Calculate how to scale image
                 """
-                if match.height == -1 or match.width == -1:
-                    # get h/w from file
-                    pass
                 if (self.img_w < 0 or match.width <= self.img_w) and (self.img_h < 0 or match.height <= self.img_h):
                     return None
                 rw = self.img_w/match.width
@@ -514,22 +472,21 @@ class MainDialog(QDialog):
                 changes = []
                 skipped = []
                 for term in self.terms:
-                    if term.matches:
-                        note = mw.col.new_note(note_type)
+                    if matches := [m for m in term.matches if m.selected]:
+                        note = mw.col.new_note(note_t)
                         note[term_fld] = term.term
-                        for match in term.matches:
-                            if match.selected:
-                                file = mw.col.media.add_file(match.file)
-                                dim = scale_img(match)
-                                dim = f' width="{dim[0]}" height="{dim[1]}"' if dim else ""
-                                note[image_fld] += f'<img src="{file}"{dim}>'
+                        for match in matches:
+                            file = mw.col.media.add_file(match.file)
+                            dim = scale_img(match)
+                            dim = f' width="{dim[0]}" height="{dim[1]}"' if dim else ""
+                            note[image_fld] += f'<img src="{file}"{dim}>'
                         if note[image_fld]:
                             # Fixme: correct way to store changes
                             changes.append(mw.col.add_note(note, deck))
                             cnt += 1
                         else:  # No selected matches for term
                             skipped.append(term.term)
-                    else: # No matches for term
+                    else: # No matches or no selected matches
                         skipped.append(term.term)
                 
                 return (cnt, changes, skipped)
@@ -575,12 +532,11 @@ class MainDialog(QDialog):
 action = QAction(LABEL, mw)
 action.triggered.connect(lambda: MainDialog())
 mw.form.menuTools.addAction(action)
+# Load engines
+engines = load()
 
 if strvercmp(CVER, NVER) < 0:
     set_version(NVER)
-
-sys.path.append(DIR)
-load()
 
 # Ask user to post debug log 
 if os.path.exists(DEBUG_FILE) and (not os.path.exists(DEBUG_PROMPTED) or os.path.getmtime(DEBUG_FILE) > os.path.getmtime(DEBUG_PROMPTED)):

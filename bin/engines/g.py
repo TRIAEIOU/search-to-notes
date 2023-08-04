@@ -1,11 +1,15 @@
 import requests, re, json, time
 from logging import Logger
 from bs4 import BeautifulSoup
-from . import engine
+from . import *
 
-class Google(engine.Engine):
+class Google(Engine):
     """Google search engine (BeautifulSoup) implementation"""
-    def init(self, logger: Logger):
+    @staticmethod
+    def title():
+        return "Google (BS)"
+
+    def __init__(self, logger: Logger):
         self.logger = logger
 
     def legend(self):
@@ -26,3 +30,5 @@ class Google(engine.Engine):
         result = []
         # Parse max no of matches                
         maxn = -1
+
+        return result
