@@ -3,13 +3,13 @@ Search to notes main application
 """
 import os, re, codecs, tempfile, requests, base64, importlib, time, logging
 from dataclasses import dataclass
-from aqt import mw
+from aqt import mw, gui_hooks
 from aqt.qt import *
 from aqt.utils import *
 from aqt.operations import CollectionOp, QueryOp
 from anki import consts, collection
 from .consts import *
-from .engines import *
+from .engine import *
 from .ankiutils import *
 
 if qtmajor == 6:
@@ -20,6 +20,7 @@ from . import imghdr
 
 CVER = get_version()
 NVER = "1.1.0"
+engines: dict[str, Engine]
 
 class ListDialog(QDialog):
     """
@@ -119,8 +120,9 @@ class MainDialog(QDialog):
         """
         Load configuration from config Dict (from Anki config file normally)
         """
+        global engines
         config = mw.addonManager.getConfig(__name__)
-        self.engine = engines.get(config.get(ENGINE, DEFAULT_ENGINE), DEFAULT_ENGINE)(self.logger)
+        self.engine = engines[config.get(ENGINE, DEFAULT_ENGINE)](self.logger, config)
         self.ui.query_legend.setText(QUERY_LEGEND + (f', {self.engine.legend()}' if self.engine.legend() else ''))
         self.ui.query_tpl.setToolTip(QUERY_TIP + (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else ''))
 
@@ -272,7 +274,7 @@ class MainDialog(QDialog):
         """
         Store image selection
         """
-        for itm in self.ui.image_lv.findItems("*", Qt.MatchWildcard):
+        for itm in self.ui.image_lv.findItems("*", Qt.MatchFlag.MatchWildcard):
             ti = itm.data(TERM_ROLE)
             ii = self.ui.image_lv.row(itm)
             
@@ -389,6 +391,10 @@ class MainDialog(QDialog):
         if self.tmp_dir: self.tmp_dir.cleanup()
         self.tmp_dir = tempfile.TemporaryDirectory()
         template = self.ui.query_tpl.text()
+        # Reload engine for debug
+        global engines
+        engines = load()
+        self.engine = engines[self.engine.title()](self.logger, mw.addonManager.getConfig(__name__))
         if len(self.terms):
             html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
             for term in self.terms:
@@ -526,20 +532,25 @@ class MainDialog(QDialog):
         bgop.run_in_background()
         
 
+# Main ##################################################################
+def init():
+    action = QAction(LABEL, mw)
+    action.triggered.connect(lambda: MainDialog())
+    mw.form.menuTools.addAction(action)
+    # Load engines
+    global engines
+    engines = load()
 
-###########################################################################
-# Add on start up
-action = QAction(LABEL, mw)
-action.triggered.connect(lambda: MainDialog())
-mw.form.menuTools.addAction(action)
-# Load engines
+    if strvercmp(CVER, NVER) < 0:
+        set_version(NVER)
+
+    # Ask user to post debug log 
+    if os.path.exists(DEBUG_FILE) and (not os.path.exists(DEBUG_PROMPTED) or os.path.getmtime(DEBUG_FILE) > os.path.getmtime(DEBUG_PROMPTED)):
+        showInfo(f'Search to notes add-on has detected an error log, consider reviewing it for any privacy concerns and then post the contents to the add-on support thread (https://forums.ankiweb.net/t/search-to-notes-support-thread/16286) to help the author and other users. The debuglog can be found here: "{DEBUG_FILE}".')
+        with open(DEBUG_PROMPTED, "w") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(DEBUG_FILE)))))
+
+gui_hooks.main_window_did_init.append(init)
 engines = load()
 
-if strvercmp(CVER, NVER) < 0:
-    set_version(NVER)
 
-# Ask user to post debug log 
-if os.path.exists(DEBUG_FILE) and (not os.path.exists(DEBUG_PROMPTED) or os.path.getmtime(DEBUG_FILE) > os.path.getmtime(DEBUG_PROMPTED)):
-    showInfo(f'Search to notes add-on has detected an error log, consider reviewing it for any privacy concerns and then post the contents to the add-on support thread (https://forums.ankiweb.net/t/search-to-notes-support-thread/16286) to help the author and other users. The debuglog can be found here: "{DEBUG_FILE}".')
-    with open(DEBUG_PROMPTED, "w") as fh:
-        fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(DEBUG_FILE)))))

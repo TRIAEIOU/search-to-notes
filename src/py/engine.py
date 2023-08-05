@@ -6,9 +6,10 @@ import os, re
 from abc import ABC, abstractmethod, abstractstaticmethod
 from logging import Logger
 from dataclasses import dataclass, field
-from importlib import import_module
+from importlib import import_module, reload
 from glob import iglob
-from . import image_sz
+from .image_sz import *
+from .consts import *
 try:
     from aqt import QApplication
 except:
@@ -23,7 +24,7 @@ class Match:
     @property
     def height(self) -> int:
         if self._height == None:
-            (self._width, self._height) = image_sz.get_image_size(self.file)
+            (self._width, self._height) = get_image_size(self.file)
         return self._height
     @height.setter
     def height(self, height: int): self._height = height
@@ -33,7 +34,7 @@ class Match:
     @property
     def width(self) -> int:
         if self._width == None:
-            (self._width, self._height) = image_sz.get_image_size(self.file)
+            (self._width, self._height) = get_image_size(self.file)
         return self._width
     @width.setter
     def width(self, width: int): self._width = width
@@ -86,7 +87,7 @@ class Engine(ABC):
         def search(self, hquery: str) -> [Match]
     """
     @abstractmethod
-    def __init__(self, logger: Logger, application: QApplication, config: any):
+    def __init__(self, logger: Logger, config: any):
         pass
     @abstractstaticmethod
     def title() -> str:
@@ -107,7 +108,12 @@ class Engine(ABC):
 
 def load():
     """Load engines, return dict of title: engine"""
-    for file in iglob(os.path.join(os.path.dirname(__file__), "*.py")):
-        import_module(f".{os.path.splitext(os.path.basename(file))[0]}", __package__)
+    for file in iglob(os.path.join(DIR, ENGINES_SUBDIR, "*.py")):
+        name = f"{ENGINES_SUBDIR}.{os.path.splitext(os.path.basename(file))[0]}"
+        if module := sys.modules.get(f'{__package__}.{name}'):
+            reload(module)
+        else:
+            import_module(f'.{name}', __package__)
     engines = {m.title(): m for m in Engine.__subclasses__()}
     return engines
+

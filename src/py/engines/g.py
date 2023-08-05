@@ -1,11 +1,11 @@
 import requests, re, json, time
 from logging import Logger
 from bs4 import BeautifulSoup
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtCore import QUrl
-from . import *
+from aqt import QWebEngineView, QUrl, mw, QWebEnginePage, QThread, QObject
+from ..engine import *
 
 _URL = 'https://www.google.com/search?source=lnms&tbm=isch&'
+result: str
 
 class Google(Engine):
     """Google search engine (BeautifulSoup) implementation"""
@@ -13,9 +13,8 @@ class Google(Engine):
     def title():
         return "Google (BS)"
 
-    def __init__(self, logger: Logger, application: QApplication, config: dict):
+    def __init__(self, logger: Logger, config: dict):
         self.logger = logger
-        self.app = application
 
     def legend(self):
         return '"[exact term]", +/-[term], site:[url], maxn:[max results]'
@@ -41,15 +40,26 @@ class Google(Engine):
                 query = f'{m.group(1).strip()} {m.group(3).strip()}'
             else:
                 query = m.group(1).strip() if m.group(1) else m.group(3).strip()
-            
-        browser = QWebEngineView()
-        browser.load(QUrl(f'{_URL}&q=a.+vertebralis'))
-        print(browser.page().toHtml(lambda a: print(a)))
+        
+        print('setting up thread')
+        thread = WorkerThread()
+        thread.start()
+        thread.wait()
+        print(f"reading {result}")
         
         """for img in imgs:
             title = img.select_one('h3').string
             img.select_one('div.islib')"""
         
-
-
         return result
+
+
+class WorkerThread(QThread):
+    def run(self):
+        print("run")
+        browser = QWebEnginePage()
+        print("setting URL")
+        browser.setUrl(QUrl(f'{_URL}&q=a.+vertebralis'))
+        print(f'html: {browser.toHtml()}')
+        global result
+        result = [{'what': 'ever'}, {'what': 'else'}]
