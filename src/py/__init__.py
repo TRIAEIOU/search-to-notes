@@ -390,12 +390,12 @@ class MainDialog(QDialog):
         # run_query root
         # DEBUG
         self.terms = [
-            Term(term='a. vertebralis'),
-            Term(term='a. basilaris'),
-            Term(term='a. femoralis'),
-            Term(term='a. brachialis'),
-            Term(term='a. radials'),
-            Term(term='a. ulnaris')
+            Term(term='a. vertebralis')#,
+            #Term(term='a. basilaris'),
+            #Term(term='a. femoralis'),
+            #Term(term='a. brachialis'),
+            #Term(term='a. radials'),
+            #Term(term='a. ulnaris')
         ]
 
 
