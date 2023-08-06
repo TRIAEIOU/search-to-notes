@@ -7,6 +7,7 @@
     "Cloze <td> attributes": "style=\"border: 1px solid black; padding: 5px;\"",
     "Shortcut previous term": "W",
     "Shortcut next term": "S",
+    "Shortcut open": "Ctrl+S",
     "Query template": "\"%0\" maxn:20",
     "Deck ID": "",
     "Note type ID": "",

@@ -106,7 +106,7 @@ class Engine(ABC):
         """Return array of Match for query."""
         return None
 
-def load():
+def load_engines():
     """Load engines, return dict of title: engine"""
     for file in iglob(os.path.join(DIR, ENGINES_SUBDIR, "*.py")):
         name = f"{ENGINES_SUBDIR}.{os.path.splitext(os.path.basename(file))[0]}"

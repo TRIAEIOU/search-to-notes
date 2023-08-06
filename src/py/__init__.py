@@ -4,6 +4,7 @@ Search to notes main application
 import os, re, codecs, tempfile, requests, base64, importlib, time, logging
 from dataclasses import dataclass
 from aqt import mw, gui_hooks
+from aqt.progress import ProgressDialog
 from aqt.qt import *
 from aqt.utils import *
 from aqt.operations import CollectionOp, QueryOp
@@ -59,6 +60,7 @@ class MainDialog(QDialog):
     img_w = -1
     cloze_table = ""
     cloze_td = ""
+    engines: list[Engine] = None
     engine: Engine = None
 
     def __init__(self):
@@ -120,9 +122,9 @@ class MainDialog(QDialog):
         """
         Load configuration from config Dict (from Anki config file normally)
         """
-        global engines
         config = mw.addonManager.getConfig(__name__)
-        self.engine = engines[config.get(ENGINE, DEFAULT_ENGINE)](self.logger, config)
+        self.engines = load_engines()
+        self.engine = self.engines[config.get(ENGINE, DEFAULT_ENGINE)](self.logger, config)
         self.ui.query_legend.setText(QUERY_LEGEND + (f', {self.engine.legend()}' if self.engine.legend() else ''))
         self.ui.query_tpl.setToolTip(QUERY_TIP + (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else ''))
 
@@ -339,22 +341,22 @@ class MainDialog(QDialog):
 
     def run_query(self):
         """
-        Run search query and populate term-images
+        Run search query and populate term-images, runs in main thread with
+        custom progress bar to allow using QWebEnginePage as headless browser
         """
-        def background(col, template):
-            """
-            Function to run network actions in background thread
-            """
+        def background(col):
+            """Function to run downloads in background thread"""
+            from time import sleep
+            sleep(3)
+            return
             cnt = 0
             for term in self.terms:
-                term.matches = []
-                matches = self.engine.search(term.query(template))
-                if matches is None:
+                if term.matches is None:
                     msg = f'{self.engine.title()} search for "{term.query(template)}" returned None'
                     self.logger.warning(msg)
                     raise Exception(msg)
                 else:
-                    for match in matches:
+                    for match in term.matches:
                         res = requests.get(match.url, stream = True)
                         if res.status_code == 200:
                             res.raw.decode_content = True
@@ -371,44 +373,68 @@ class MainDialog(QDialog):
                                 self.logger.warning(f"Search match key error|match: {match}")
                             else:
                                 match.file = tmp.name
-                                term.matches.append(match)
                             cnt += 1
                         else:
                             self.logger.info(f"Non-200 return|match: {match}")
-
+                
             return type('obj', (object,), {'changes' : collection.OpChanges, 'count': cnt})()
-
+            
         def finished(result):
-            """
-            Run when background thread finishes - update GUI
-            """
+            """Run when background thread finishes - update GUI"""
             self.ui.generate.setEnabled(True)
-            if self.ui.term_lv.currentRow() == 0: self.ui.term_lv.setCurrentRow(-1)
+            if self.ui.term_lv.currentRow() == 0:
+                self.ui.term_lv.setCurrentRow(-1)
             self.ui.image_lv.setEnabled(True)
             self.ui.term_lv.setCurrentRow(0)
 
-        # Root run_query code
+        # run_query root
+        # DEBUG
+        self.terms = [
+            Term(term='a. vertebralis'),
+            Term(term='a. basilaris'),
+            Term(term='a. femoralis'),
+            Term(term='a. brachialis'),
+            Term(term='a. radials'),
+            Term(term='a. ulnaris')
+        ]
+
+
+        if not self.terms:
+            return
+
         if self.tmp_dir: self.tmp_dir.cleanup()
         self.tmp_dir = tempfile.TemporaryDirectory()
         template = self.ui.query_tpl.text()
-        # Reload engine for debug
-        global engines
-        engines = load()
-        self.engine = engines[self.engine.title()](self.logger, mw.addonManager.getConfig(__name__))
-        if len(self.terms):
-            html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
-            for term in self.terms:
-                html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query(template)}</td></tr>'
-            html += '</table>'
 
-            dlg = ListDialog(self, "Run search query", html)
-            dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-            if dlg.exec() == 1:
-                #bgop = CollectionOp(parent=mw, op=background)
-                #bgop.success(finished)
-                #bgop.failure(finished)
-                #bgop.run_in_background()
-                QueryOp(parent=self, op=lambda col: background(self, template), success=finished).with_progress().run_in_background()
+        # Reload engine for debug
+        self.engines = load_engines()
+        self.engine = self.engines[self.engine.title()](self.logger, mw.addonManager.getConfig(__name__))
+
+        html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
+        for term in self.terms:
+            html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query(template)}</td></tr>'
+        html += '</table>'
+
+        dlg = ListDialog(self, "Run search query", html)
+        dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
+        if dlg.exec() == 1:
+            # Run queries in main thread to allow Qt use
+            progress = QProgressDialog(parent=self, labelText="Running queries...", minimum=0, maximum=len(self.terms))
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setCancelButton(None)
+            progress.forceShow()
+            mw.app.processEvents()#QEventLoop.ProcessEventsFlag.AllEvents)
+            cnt = 0
+            for i, term in enumerate(self.terms):
+                query = term.query(template)
+                progress.setLabelText(f'Searching `{query}`...')
+                progress.setValue(i)
+                mw.app.processEvents()#QEventLoop.ProcessEventsFlag.AllEvents)
+                term.matches = self.engine.search(query)
+            progress.setValue(len(self.terms))
+
+            # Download in background thread
+            QueryOp(parent=self, op=lambda col: background(col), success=finished).with_progress('Downloading images...').run_in_background()
 
 
     def generate_notes(self):
@@ -535,12 +561,10 @@ class MainDialog(QDialog):
 # Main ##################################################################
 def init():
     action = QAction(LABEL, mw)
+    if sc := mw.addonManager.getConfig(__name__).get('Shortcut open'):
+        action.setShortcut(sc)
     action.triggered.connect(lambda: MainDialog())
     mw.form.menuTools.addAction(action)
-    # Load engines
-    global engines
-    engines = load()
-
     if strvercmp(CVER, NVER) < 0:
         set_version(NVER)
 
@@ -551,6 +575,3 @@ def init():
             fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(DEBUG_FILE)))))
 
 gui_hooks.main_window_did_init.append(init)
-engines = load()
-
-
