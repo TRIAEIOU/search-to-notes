@@ -346,37 +346,42 @@ class MainDialog(QDialog):
         """
         def background(col):
             """Function to run downloads in background thread"""
-            from time import sleep
-            sleep(3)
-            return
             cnt = 0
             for term in self.terms:
                 if term.matches is None:
-                    msg = f'{self.engine.title()} search for "{term.query(template)}" returned None'
+                    msg = f'{self.engine.title()} search for "{term.query(template)}" returned None, search engine plugin broken?'
                     self.logger.warning(msg)
                     raise Exception(msg)
                 else:
                     for match in term.matches:
-                        res = requests.get(match.url, stream = True)
-                        if res.status_code == 200:
-                            res.raw.decode_content = True
-                            ext = imghdr.what('', h=res.content)
-                            if ext:
-                                ext = f".{ext}"
+                        try:
+                            res = requests.get(match.url, stream=True)#, verify=False)
+                            #print(f'downloading {match} - got {res}')
+                            if res.status_code == 200:
+                                res.raw.decode_content = True
+                                ext = imghdr.what('', h=res.content)
+                                if ext:
+                                    ext = f".{ext}"
+                                else:
+                                    self.logger.info(f"Unable to detect image type for {match.url}")
+                                    ext = ".jpeg"
+                                tmp = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
+                                tmp.file.write(res.content)
+                                # Debug sanity check
+                                if match.title == None or match.url == None:
+                                    self.logger.warning(f"Search match key error|match: {match}")
+                                else:
+                                    match.file = tmp.name
+                                cnt += 1
                             else:
-                                self.logger.warning(f"Unable to detect image type for {match.url}")
-                                ext = ".jpeg"
-                            tmp = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
-                            tmp.file.write(res.content)
-                            # Debug sanity check
-                            if match.title == None or match.url == None:
-                                self.logger.warning(f"Search match key error|match: {match}")
-                            else:
-                                match.file = tmp.name
-                            cnt += 1
-                        else:
-                            self.logger.info(f"Non-200 return|match: {match}")
-                
+                                self.logger.info(f"Non-200 return|match: {match}")
+                        except Exception as e:
+                            self.logger.info(f'Exception getting {match.url}: {e}')
+            print("finished downloading:")
+            for t in self.terms:
+                print(f" {t.term}")
+                for m in t.matches:
+                    print(f"    {m.file}")
             return type('obj', (object,), {'changes' : collection.OpChanges, 'count': cnt})()
             
         def finished(result):
