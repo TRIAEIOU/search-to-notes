@@ -348,12 +348,16 @@ class MainDialog(QDialog):
             """Function to run downloads in background thread"""
             cnt = 0
             for term in self.terms:
-                if term.matches is None:
+                term.matches = []
+                print(f'Searching {term.query(template)}')
+                matches = self.engine.search(term.query(template))
+                if matches is None:
                     msg = f'{self.engine.title()} search for "{term.query(template)}" returned None, search engine plugin broken?'
                     self.logger.warning(msg)
                     raise Exception(msg)
                 else:
-                    for match in term.matches:
+                    for match in matches:
+                        print(f'Downloading {match.url}')
                         try:
                             res = requests.get(match.url, stream=True)#, verify=False)
                             #print(f'downloading {match} - got {res}')
@@ -372,20 +376,23 @@ class MainDialog(QDialog):
                                     self.logger.warning(f"Search match key error|match: {match}")
                                 else:
                                     match.file = tmp.name
-                                cnt += 1
+                                    term.matches.append(match)
+                                    cnt += 1
                             else:
                                 self.logger.info(f"Non-200 return|match: {match}")
                         except Exception as e:
                             self.logger.info(f'Exception getting {match.url}: {e}')
-            print("finished downloading:")
+            
+            print("Downloaded:")
             for t in self.terms:
-                print(f" {t.term}")
+                print(f"  {t.term}")
                 for m in t.matches:
                     print(f"    {m.file}")
             return type('obj', (object,), {'changes' : collection.OpChanges, 'count': cnt})()
             
         def finished(result):
             """Run when background thread finishes - update GUI"""
+            # This doesn't update the list?
             self.ui.generate.setEnabled(True)
             if self.ui.term_lv.currentRow() == 0:
                 self.ui.term_lv.setCurrentRow(-1)
@@ -394,14 +401,15 @@ class MainDialog(QDialog):
 
         # run_query root
         # DEBUG
-        self.terms = [
-            Term(term='a. vertebralis')#,
-            #Term(term='a. basilaris'),
-            #Term(term='a. femoralis'),
-            #Term(term='a. brachialis'),
-            #Term(term='a. radials'),
-            #Term(term='a. ulnaris')
-        ]
+        if not self.terms:
+            self.terms = [
+                Term(term='a. vertebralis')#,
+                #Term(term='a. basilaris'),
+                #Term(term='a. femoralis'),
+                #Term(term='a. brachialis'),
+                #Term(term='a. radials'),
+                #Term(term='a. ulnaris')
+            ]
 
 
         if not self.terms:
@@ -411,10 +419,6 @@ class MainDialog(QDialog):
         self.tmp_dir = tempfile.TemporaryDirectory()
         template = self.ui.query_tpl.text()
 
-        # Reload engine for debug
-        self.engines = load_engines()
-        self.engine = self.engines[self.engine.title()](self.logger, mw.addonManager.getConfig(__name__))
-
         html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
         for term in self.terms:
             html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query(template)}</td></tr>'
@@ -423,21 +427,6 @@ class MainDialog(QDialog):
         dlg = ListDialog(self, "Run search query", html)
         dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         if dlg.exec() == 1:
-            # Run queries in main thread to allow Qt use
-            progress = QProgressDialog(parent=self, labelText="Running queries...", minimum=0, maximum=len(self.terms))
-            progress.setWindowModality(Qt.WindowModality.WindowModal)
-            progress.setCancelButton(None)
-            progress.forceShow()
-            mw.app.processEvents()#QEventLoop.ProcessEventsFlag.AllEvents)
-            cnt = 0
-            for i, term in enumerate(self.terms):
-                query = term.query(template)
-                progress.setLabelText(f'Searching `{query}`...')
-                progress.setValue(i)
-                mw.app.processEvents()#QEventLoop.ProcessEventsFlag.AllEvents)
-                term.matches = self.engine.search(query)
-            progress.setValue(len(self.terms))
-
             # Download in background thread
             QueryOp(parent=self, op=lambda col: background(col), success=finished).with_progress('Downloading images...').run_in_background()
 
