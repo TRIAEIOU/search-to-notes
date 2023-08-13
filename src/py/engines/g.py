@@ -1,15 +1,10 @@
-import requests, re, json, time
+import requests, re, json
 from logging import Logger
 from bs4 import BeautifulSoup
 from ..engine import *
 
-def url(query: str):
-    return (
-        'https://www.google.com/search?safe=off&site=&tbm=isch&source=hp&gs_l=img'
-        '&q=' + query +'&oq=' + query
-    )
-
 def parseurl(url: str):
+    """Parse URL into dict of components or None if invalid"""
     regex = re.compile( # https://stackoverflow.com/a/67099046
         r"(\w+://)?"                                        # protocol
         r"((?:[\w\-]+\.)*)"                                 # host/subdomain
@@ -32,13 +27,14 @@ def parseurl(url: str):
     return None
 
 def decode_json(string: str):
+    """Decode JSON string"""
     return json.loads(f'{{"1": "{string}"}}')['1']
 
 class Google(Engine):
-    """Google search engine (BeautifulSoup) implementation"""
+    """Google search engine implementation"""
     @staticmethod
     def title():
-        return "Google (BS)"
+        return "Google"
 
     def __init__(self, logger: Logger, config: dict):
         self.logger = logger
@@ -70,7 +66,7 @@ class Google(Engine):
         html = requests.get(
             url = "https://www.google.com/search",
             params = {
-                "q": "a. vertebralis",          # search query
+                "q": query,          # search query
                 "tbm": "isch",                  # image results
                 "hl": "en",                     # language of the search
                 "gl": "us",                     # country where search comes from
@@ -110,5 +106,4 @@ class Google(Engine):
                         if len(result) == maxn:
                             break
 
-        print('returning:\n  ' + "\n  ".join([r.url for r in result]))
         return result

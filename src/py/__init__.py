@@ -1,17 +1,24 @@
 """
 Search to notes main application
 """
-import os, re, codecs, tempfile, requests, base64, importlib, time, logging
-from dataclasses import dataclass
+import os, codecs, tempfile, requests, base64, time, logging, ssl, urllib3, subprocess
+from collections import OrderedDict
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
+from urllib3.util.ssl_ import create_urllib3_context
 from aqt import mw, gui_hooks
-from aqt.progress import ProgressDialog
 from aqt.qt import *
 from aqt.utils import *
-from aqt.operations import CollectionOp, QueryOp
+from aqt.operations import CollectionOp
 from anki import consts, collection
 from .consts import *
 from .engine import *
 from .ankiutils import *
+
+if sys.platform == 'win32' or sys.platform == 'cygwin':
+    CURL = "curl.exe" if shutil.which('curl.exe') else None
+else:
+    CURL = "curl" if shutil.which('curl') else None
 
 if qtmajor == 6:
     from . import maindialog_qt6 as ui_maindialog, enterdialog_qt6 as ui_enterdialog, imagedialog_qt6 as ui_imagedialog, listdialog_qt6 as ui_listdialog
@@ -341,94 +348,199 @@ class MainDialog(QDialog):
 
     def run_query(self):
         """
-        Run search query and populate term-images, runs in main thread with
-        custom progress bar to allow using QWebEnginePage as headless browser
+        Run search query and populate term-images, runs in main thread with custom
+        progress bar
         """
-        def background(col):
-            """Function to run downloads in background thread"""
-            cnt = 0
-            for term in self.terms:
-                term.matches = []
-                print(f'Searching {term.query(template)}')
-                matches = self.engine.search(term.query(template))
-                if matches is None:
-                    msg = f'{self.engine.title()} search for "{term.query(template)}" returned None, search engine plugin broken?'
-                    self.logger.warning(msg)
-                    raise Exception(msg)
-                else:
-                    for match in matches:
-                        print(f'Downloading {match.url}')
-                        try:
-                            res = requests.get(match.url, stream=True)#, verify=False)
-                            #print(f'downloading {match} - got {res}')
-                            if res.status_code == 200:
-                                res.raw.decode_content = True
-                                ext = imghdr.what('', h=res.content)
-                                if ext:
-                                    ext = f".{ext}"
-                                else:
-                                    self.logger.info(f"Unable to detect image type for {match.url}")
-                                    ext = ".jpeg"
-                                tmp = tempfile.NamedTemporaryFile(suffix=ext, dir=self.tmp_dir.name, delete=False)
-                                tmp.file.write(res.content)
-                                # Debug sanity check
-                                if match.title == None or match.url == None:
-                                    self.logger.warning(f"Search match key error|match: {match}")
-                                else:
-                                    match.file = tmp.name
-                                    term.matches.append(match)
-                                    cnt += 1
-                            else:
-                                self.logger.info(f"Non-200 return|match: {match}")
-                        except Exception as e:
-                            self.logger.info(f'Exception getting {match.url}: {e}')
-            
-            print("Downloaded:")
-            for t in self.terms:
-                print(f"  {t.term}")
-                for m in t.matches:
-                    print(f"    {m.file}")
-            return type('obj', (object,), {'changes' : collection.OpChanges, 'count': cnt})()
-            
-        def finished(result):
-            """Run when background thread finishes - update GUI"""
-            # This doesn't update the list?
-            self.ui.generate.setEnabled(True)
-            if self.ui.term_lv.currentRow() == 0:
-                self.ui.term_lv.setCurrentRow(-1)
-            self.ui.image_lv.setEnabled(True)
-            self.ui.term_lv.setCurrentRow(0)
 
-        # run_query root
-        # DEBUG
-        if not self.terms:
-            self.terms = [
-                Term(term='a. vertebralis')#,
-                #Term(term='a. basilaris'),
-                #Term(term='a. femoralis'),
-                #Term(term='a. brachialis'),
-                #Term(term='a. radials'),
-                #Term(term='a. ulnaris')
-            ]
+        def curl_download(url: str):
+            """Attempt to download URL using `curl`, return tuple (status_code, file)"""
+            tmp = tempfile.NamedTemporaryFile(
+                mode='wb',
+                suffix='.jpg',
+                dir=self.tmp_dir.name,
+                delete=False
+            )
+            print(f'about to curl to {tmp.name}')
+            proc_info = subprocess.run(
+                [
+                    CURL,
+                    '-X', 'GET',
+                    url,
+                    '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36, Accept-Encoding:gzip,deflate',
+                    '-w', '%{http_code}',
+                    '-L',
+                    '-o', tmp.name 
+                ],
+                stdout=subprocess.PIPE,
+                universal_newlines=True,
+                shell=True
+            )
+            try:
+                code = int(proc_info.stdout.strip())
+            except:
+                code = 400
+            print(f'curl returned: {code} ({type(code)})')
+            return (code, tmp.name)
+
+        def requests_download(url: str):
+            """
+            Attempt to download URL with `requests`, return tuple (status_code, file)
+            """
+            # Some anti-fingerprinting stuff to be able to download
+            class TlsAdapter(HTTPAdapter):
+                """
+                Class to counter TLS fingerprinting
+                https://scrapfly.io/blog/how-to-avoid-web-scraping-blocking-tls/
+                """
+                def __init__(self, ssl_options=0, **kwargs):
+                    self.ssl_options = ssl_options
+                    super(TlsAdapter, self).__init__(**kwargs)
+
+                def init_poolmanager(self, *pool_args, **pool_kwargs):
+                    # see "openssl ciphers" command for cipher names
+                    ctx = create_urllib3_context(
+                        ciphers="ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384", cert_reqs=ssl.CERT_REQUIRED,
+                        options=self.ssl_options
+                    )
+                    self.poolmanager = PoolManager(*pool_args, ssl_context=ctx, **pool_kwargs)
+
+            session = requests.Session()
+            session.mount(
+                "https://",
+                TlsAdapter(ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1) # prio TLS1.2 
+            )
+            res = session.get(
+                url = url,
+                headers = OrderedDict([
+                    ('Upgrade-Insecure-Requests', '1'),
+                    ('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36'),
+                    ('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'),
+                    ('Accept-Encoding', 'gzip, deflate'),
+                    ('Accept-Language', 'en-US,en;q=0.5')
+                ]),
+                allow_redirects=True,
+                stream = True,
+                timeout = 15,
+                verify=False
+            )
+            #print(f'downloading {match} - got {res}')
+            if res.status_code != 200:
+                self.logger.info(f"Non-200 return|match: {match}")
+                return (res.status_code, None)
+
+            res.raw.decode_content = True
+            if e := imghdr.what(file=None, h=res.content):
+                ext = f".{e}"
+            else:
+                self.logger.info(f"Unable to detect image type for {match.url}")
+                ext = ".jpg"
+            tmp = tempfile.NamedTemporaryFile(
+                mode='wb',
+                suffix=ext,
+                dir=self.tmp_dir.name,
+                delete=False
+            )
+            for chunk in res: tmp.file.write(chunk)
+            return (res.status_code, tmp.name)
 
 
-        if not self.terms:
-            return
+        if not self.terms: return
 
-        if self.tmp_dir: self.tmp_dir.cleanup()
-        self.tmp_dir = tempfile.TemporaryDirectory()
+        # Confirm with user
         template = self.ui.query_tpl.text()
-
         html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
         for term in self.terms:
             html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query(template)}</td></tr>'
         html += '</table>'
-
         dlg = ListDialog(self, "Run search query", html)
         dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        if dlg.exec() == 1:
-            # Download in background thread
-            QueryOp(parent=self, op=lambda col: background(col), success=finished).with_progress('Downloading images...').run_in_background()
+        if dlg.exec() != 1: return
+        
+        # Setup
+        progress = QProgressDialog(parent=self, labelText="Getting images...", minimum=0, maximum=len(self.terms))
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setFixedWidth(400)
+        progress.setAutoClose(False)
+        progress.forceShow()
+        mw.app.processEvents()
+        if progress.wasCanceled(): return
+
+        # Run queries
+        cnt = 0
+        for i, term in enumerate(self.terms):
+            query = term.query(template)
+            progress.setLabelText(f'Searching `{query}`...')
+            progress.setValue(i)
+            mw.app.processEvents()
+            if progress.wasCanceled(): return
+            term.matches = self.engine.search(query)
+            if term.matches is None:
+                msg = f'{self.engine.title()} search for "{query}" returned None, search engine plugin broken?'
+                self.logger.warning(msg)
+                raise Exception(msg)
+            cnt += len(term.matches)
+        progress.setValue(len(self.terms))
+        
+        # Download images
+        if self.tmp_dir: self.tmp_dir.cleanup()
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        progress.setValue(0)
+        progress.setMaximum(cnt)
+        progress.setAutoClose(True)
+        mw.app.processEvents()
+        if progress.wasCanceled(): return
+        i = 0
+        all_skipped = {}
+        requests.packages.urllib3.disable_warnings(
+            requests.packages.urllib3.exceptions.InsecureRequestWarning
+        )
+        for term in self.terms:
+            matches = []
+            skipped = []
+            for match in term.matches:
+                print(f'Downloading {match.url}')
+                progress.setLabelText(f'Downloading `{match.url}`...')
+                progress.setValue(i)
+                mw.app.processEvents()
+                if progress.wasCanceled(): return
+                i += 1
+                try:
+                    if CURL: (status_code, file) = curl_download(match.url)
+                    else: (status_code, file) = requests_download(match.url)
+                    if status_code == 200:
+                        match.file = file
+                        matches.append(match)
+                    else:
+                        skipped.append(f'{match.url} ({status_code})')
+                except Exception as e:
+                    self.logger.info(f'Exception `{match.url}`: {e}')
+                    skipped.append(f'{match.url} ({e})')
+ 
+            term.matches = matches
+            if skipped:
+                all_skipped[term.term] = skipped
+        progress.setValue(cnt)
+
+        # DEBUG
+        print("Downloaded:")
+        for t in self.terms:
+            print(f"  {t.term}")
+            for m in t.matches:
+                print(f"    {m.file}")
+
+        # Update GUI
+        self.ui.generate.setEnabled(True)
+        if self.ui.term_lv.currentRow() == 0:
+            self.ui.term_lv.setCurrentRow(-1)
+        self.ui.image_lv.setEnabled(True)
+        self.ui.term_lv.setCurrentRow(0)
+
+        # Alert user to skipped images
+        if all_skipped:
+            msg = f'The following images were found but not downloaded:'
+            for k, v in all_skipped.items():
+                msg += f'\n{k}:\n  ' + "\n  ".join(v)
+            show_info(msg)
 
 
     def generate_notes(self):
