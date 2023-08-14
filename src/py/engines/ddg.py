@@ -26,15 +26,15 @@ class DDG(Engine):
         return '"[exact term]", +/-[term], site:[url], maxn:[max results]'
 
     def tooltip(self):
-        return \
-"""<b>SEARCH ENGINE SYNTAX</b>
-<ul><li>cats dogs => cats or dogs in results</li>
-<li>"cats and dogs" => Exact term "cats and dogs" in results</li>
-<li>cats -dogs => Fewer dogs in results</li>
-<li>cats +dogs => More dogs in results</li>
-<li>site:commons.wikimedia.org => Only results from commons.wikimedia.org</li>
-<li>intitle:anki => Only results with page title including "anki"</li>
-<li>maxn:10 => Only first 10 results (default all)</li></ul>"""
+        return (
+            '<b>SEARCH ENGINE SYNTAX</b>'
+            '<ul><li><code>dogs cats</code>: dogs or cats in results</li>'
+            '<li><code>"dogs and cats"</code>: Exact term "dogs and cats" in results</li>'
+            '<li><code>+dogs cats</code>: more dogs in results</li>'
+            '<li><code>dogs -cats</code>: less cats in results</li>'
+            '<li><code>intitle:dogs</code>: Only results with webview.page() title including "dogs"</li>'
+            '<li><code>maxn:10</code>: Only first 10 results (default all)</li></ul>'
+        )
 
     def search(self, query: str):
 

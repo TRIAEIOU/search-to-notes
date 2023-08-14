@@ -2,7 +2,6 @@
 
 Search to notes is an Anki [addon](https://ankiweb.net/shared/info/1034341786) to rapidly generate notes from an image web search (Anki [forum](https://forums.ankiweb.net/t/search-to-notes-support-thread/16286)).
 
-**CREDIT TO [DEEPAN](https://github.com/deepanprabhu) FOR INSPIRATION FOR THE DDG API [IMPLEMENTATION](https://github.com/deepanprabhu/duckduckgo-images-api)**
 
 Search to notes (S2N) is designed to rapidly generate notes from a list of terms, such as a list of anatomy names (for all of us that tend to get lists with 400 Latin names that are on the next exam).
 
@@ -22,22 +21,20 @@ Edit the search terms manually, in the Enter/paste window or load them from a te
 
 ## 2. Specify search query template and run the query
 
-The template will be applied to each term using the following substitution:
+The template will be applied to each term using the following substitutions and configurations:
 
-- %0 - will be replaced with the complete term
-- %1 - will be replaced by the first part of the term (everything up to the first tab character, i.e. if there are no tab characters it will be the same as %0)
-- %2 - will be replaced by the second part of the term (everything between the first and second tab character), etc.
-- Any %\<digit> that doesn't have a corresponding part in the term (i.e. %3 in the template when a term only has one tab character) is deleted.
+- `%0` - will be replaced with the complete term
+- `%1` - will be replaced by the first part of the term (everything up to the first tab character, i.e. if there are no tab characters it will be the same as `%0`)
+- `%2` - will be replaced by the second part of the term (everything between the first and second tab character), etc.
+- Any `%\<digit>` that doesn't have a corresponding part in the term (i.e. `%3` in the template when a term only has one tab character) is deleted.
+-  `maxn:<digits>` - limits the number of images to be downloaded (all found if omitted).
 
-The search syntax is as follows:
+The search syntax is dependent on the search engine used, `Search to notes` currently ships with the following eninges (which search engine is used is set in addon configuration, `Google` or `DuckDuckGo (API)`):
 
-- cats dogs => cats or dogs in results
-- "cats and dogs" => Exact term "cats and dogs" in results
-- cats -dogs => Fewer dogs in results
-- cats +dogs => More dogs in results
-- site:wikipedia.org => Only results from wikipedia.org
-- intitle:anki => Only results with page title including "anki"
-- maxn:10 => Only first 10 results (all if omitted)
+- `Google`: Google images search using web page parsing. ([instructions](https://ahrefs.com/blog/google-advanced-search-operators/) and [instructions](https://developers.google.com/search/docs/monitor-debug/search-operators/image-search))
+- `DuckDuckGo (API)`: DuckDuckGo images search using the DDG API. [(instructions)](https://duckduckgo.com/duckduckgo-help-pages/results/syntax/)
+
+The addon will try to use `curl` to download images as is more robust than Python `requests`, if the addon doesn't find `curl` installed on the system it will fall back to using `requests`. `curl` should come installed from Windows 10 and onwards, on macOS and some linux dists - ensure it is installed (or install it) on your platform to benefit.
 
 ### Remarks
 
@@ -68,12 +65,31 @@ Select deck, note type, and in which field the terms and images go respectively 
 
 ![Step 4](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/3.png?raw=true){height="400"}
 
+## Configuration
+
+Configuration is made through the addon configuration dialog:
+
+- `Engine`: Which search engine implementation to use, shipped alternatives are `Google` and `DuckDuckGo (API)`.
+- `Shortcut open`: Shortcut to open the `Search to notes` dialog from the Anki main window.
+- `Shortcut next/previous term`: Shortcut to move down/up in the list of terms in the `Search to notes` main window.
+- `Thumbnail height/width`: Dimensions of the thumbnails in the `Search to notes` main window.
+- `Image height/width`: Dimensions to scale images to when generating notes.
+- `Cloze <table>/<td> attributes`: Attributes added to `<table>`/`<td>` tags when generating cloze notes, for instance to apply some sort of styling (`style="border: 1px solid black; border-collapse: collapse;"`) or a class (`class="my-own-styling-class"`).
+- `Listview light mode`/`Listview dark mode`: Styling (notably of how the current as well as selected images are hightlighted) depending on light or dark mode.
+
+
 ## Remarks
 
 The results returned by the DDG API are somewhat mediocre, anyone that is up for it can plug in another search engine (requirements in the source, but basically provide a search function that returns a list of matches as well as functions that return tooltip and legend strings).
 We will see what explodes with 2.1.50 and the move to Qt 6.
 
+## Credits
+
+- [DEEPAN](https://github.com/deepanprabhu) for inspiration for DuckDuckGo [implementation](https://github.com/deepanprabhu/duckduckgo-images-api)
+
+
 ## Changelog
 
 - 2022-01-01: Prepare code for Anki Qt5 to Qt6 transition. Added local error logging.
 - 2022-05-18: Bug fixes.
+- 2023-08-14: Add Google images search, code refactor, add some configurations, update README.

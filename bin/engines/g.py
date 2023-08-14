@@ -40,18 +40,31 @@ class Google(Engine):
         self.logger = logger
 
     def legend(self):
-        return '"[exact term]", +/-[term], site:[url], maxn:[max results]'
+        return '"[exact term]", -[term], site:[url], imagesize:[hxw], maxn:[max results]'
 
     def tooltip(self):
-        return \
-"""<b>SEARCH ENGINE SYNTAX</b>
-<ul><li>cats dogs => cats or dogs in results</li>
-<li>"cats and dogs" => Exact term "cats and dogs" in results</li>
-<li>cats -dogs => Fewer dogs in results</li>
-<li>cats +dogs => More dogs in results</li>
-<li>site:commons.wikimedia.org => Only results from commons.wikimedia.org</li>
-<li>intitle:anki => Only results with webview.page() title including "anki"</li>
-<li>maxn:10 => Only first 10 results (default all)</li></ul>"""
+        return (
+            '<b>SEARCH ENGINE SYNTAX</b>'
+            '<ul><li><code>dogs cats</code>: dogs or cats in results</li>'
+            '<li><code>"dogs and cats"</code>: Exact term "dogs and cats" in results</li>'
+            '<li><code>dogs -cats</code>: dogs but no cats in results</li>'
+            '<li><code>site:commons.wikimedia.org</code>: Only results from commons.wikimedia.org</li>'
+            '<li><code>dogs OR cats</code> / </code>cast | dogs</code>: Search for results related to "dogs" or "cats".</li>'
+            '<li><code>dogs AND cats</code>: Search for results related to "dogs" and "cats".</li>'
+            '<li><code>d*g</code>: Wildcard matching any word or phrase.</li>'
+            '<li><code>(dog or cat) and (head or tail)</code>: Group multiple searches.</li>'
+            '<li><code>define:dog</code>: Search for the definition of "dog".</li>'
+            '<li><code>filetype:jpg</code> / </code>ext:jpg</code>: Search for jpg files.</li>'
+            '<li><code>related:ankiweb.net</code>: Search for sites related to ankiweb.net.</li>'
+            '<li><code>intitle:dogs</code>: Only results with webview.page() title including "dogs"</li>'
+            '<li><code>allintitle:dogs,cats</code>: Search for pages with multiple words in the title tag.</li>'
+            '<li><code>inurl:cats</code>: Search for pages with "dogs" in the URL.</li>'
+            '<li><code>intext:dogs</code>: Search for pages with "dogs" in their content.</li>'
+            '<li><code>allintext:dogs,cats</code>: Search for pages with multiple words in the content.</li>'
+            '<li><code>before:2020-02-02</code> / <code>after:2020-02-02</code>: Search for results from before/after 2020-02-02.</li>'
+            '<li><code>maxn:10</code>: Only first 10 results (default all)</li></ul>'
+        )
+    
 
     def search(self, query: str):
         # Parse max no of matches

@@ -1,17 +1,25 @@
 {
+    "Engine": "Google",
+    "Shortcut open": "Ctrl+S",
+    "Shortcut next term": "S",
+    "Shortcut previous term": "W",
     "Thumbnail height": 200,
     "Thumbnail width": 200,
     "Image height": 400,
     "Image width": 400,
     "Cloze <table> attributes": "style=\"border: 1px solid black; border-collapse: collapse;\"",
     "Cloze <td> attributes": "style=\"border: 1px solid black; padding: 5px;\"",
-    "Shortcut previous term": "W",
-    "Shortcut next term": "S",
-    "Query template": "\"%0\" maxn:20",
-    "Deck ID": "",
-    "Note type ID": "",
-    "Dir": "",
-    "Term field": "",
-    "Image field": "",
-    "Engine": "DuckDuckGo (API)"
+    "Listview light mode": "QListView::item:selected {background-color: #6495ED; color: #d0d0d0;}\nQListView::item:focus {background-color: #0000ff; color: #ffffff; font-weight: bold;}",
+    "Listview dark mode": "QListView::item:selected {background-color: #6495ED; color: #d0d0d0;}\nQListView::item:focus {background-color: #0000ff; color: #ffffff; font-weight: bold;}",
+    "Internal state": {
+        "Geometry": "",
+        "Splitter pos": "",
+        "Image zoom geometry": "",
+        "Dir": "",
+        "Deck ID": "",
+        "Note type ID": "",
+        "Term field": "",
+        "Image field": "",
+        "Query template": "\"%0\" maxn:20"
+    }
 }

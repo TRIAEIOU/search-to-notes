@@ -108,7 +108,7 @@ class Engine(ABC):
 
 def load_engines():
     """Load engines, return dict of title: engine"""
-    for file in iglob(os.path.join(DIR, ENGINES_SUBDIR, "*.py")):
+    for file in iglob(os.path.join(ADDON_DIR, ENGINES_SUBDIR, "*.py")):
         name = f"{ENGINES_SUBDIR}.{os.path.splitext(os.path.basename(file))[0]}"
         if module := sys.modules.get(f'{__package__}.{name}'):
             reload(module)

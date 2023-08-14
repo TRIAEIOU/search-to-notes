@@ -7,25 +7,29 @@ LIST_DLG_HMAX = 500
 TERM_ROLE = Qt.ItemDataRole.UserRole + 1
 
 # CONFIG KEYS
-GEOMETRY = "Geometry"
-SPLITTER = "Splitter pos"
-THUMB_HEIGHT = "Thumbnail height"
-THUMB_WIDTH = "Thumbnail width"
-QUERY_TEMPLATE =  "Query template"
-DECK = "Deck ID"
-NOTE = "Note type ID"
-DIR = "Dir"
-TERM = "Term field"
-IMAGE = "Image field"
-IMGDLG_GEOMETRY = "Image zoom geometry"
-ENGINE = "Engine"
-IMG_HEIGHT = "Image height"
-IMG_WIDTH = "Image width"
-DEFAULT_ENGINE = "DuckDuckGo (API)"
-CLOZE_TABLE = "Cloze <table> attributes"
-CLOZE_TD = "Cloze <td> attributes"
-SC_TERM_UP = "Shortcut previous term"
-SC_TERM_DOWN = "Shortcut next term"
+CFG_THUMBH = "Thumbnail height"
+CFG_THUMBW = "Thumbnail width"
+CFG_TEMPLATE =  "Query template"
+CFG_ENGINE = "Engine"
+CFG_IMGH = "Image height"
+CFG_IMGW = "Image width"
+CFG_DEFAULT = "DuckDuckGo (API)"
+CFG_CLOZE_TABLE = "Cloze <table> attributes"
+CFG_CLOZE_TD = "Cloze <td> attributes"
+CFG_SC_PREV = "Shortcut previous term"
+CFG_SC_NEXT = "Shortcut next term"
+CFG_LIGHT = "Listview dark mode"
+CFG_DARK = "Listview dark mode"
+
+CFG_STATE = "Internal state"
+CFG_GEOMETRY = "Geometry"
+CFG_SPLITTER = "Splitter pos"
+CFG_DECK = "Deck ID"
+CFG_NOTE = "Note type ID"
+CFG_DIR = "Dir"
+CFG_TERM = "Term field"
+CFG_IMAGE = "Image field"
+CFG_IMGDLG_GEOMETRY = "Image zoom geometry"
 
 # CLOZE NOTE GENERATION
 CLOZE_PROMPT_TERM = 1
@@ -35,21 +39,21 @@ CLOZE_PROMPTS = [{'prompt': CLOZE_PROMPT_TERM, 'label': 'Term prompt/clozed imag
 # MISC TEXT/LABELS
 DEBUG_FILENAME = "s2n_error_log.txt"
 DEBUG_PROMPTEDNAME = "s2n_error_log.prompt"
-DIR = os.path.dirname(os.path.realpath(__file__))
+ADDON_DIR = os.path.dirname(os.path.realpath(__file__))
 ENGINES_SUBDIR = "engines"
-DEBUG_FILE = os.path.join(DIR, DEBUG_FILENAME)
-DEBUG_PROMPTED = os.path.join(DIR, DEBUG_PROMPTEDNAME)
+DEBUG_FILE = os.path.join(ADDON_DIR, DEBUG_FILENAME)
+DEBUG_PROMPTED = os.path.join(ADDON_DIR, DEBUG_PROMPTEDNAME)
 TITLE = "Search to notes"
 LABEL = "Create notes from web image search"
 NO_TITLE = "<none>"
-QUERY_LEGEND = '%0: complete term, %1: first tab separated part, ...'
+QUERY_LEGEND = '<code>%0</code>: complete term, <code>%1</code>: first tab separated part, ...'
 QUERY_TIP = """<b>QUERY TEMPLATE SYNTAX</b><br>
-Search terms will be split on tab character and %[digit] in the search query substituted with corresponding segments:
-<ul><li>%0 complete term</li>
-</li>%1 first segment (i.e. if no tabs present %1 will be the same as %0)</li>
-<li>%2 second segment</li>
+Search terms will be split on tab character and <code>%[digit]</code> in the search query substituted with corresponding segments:
+<ul><li><code>%0</code>: complete term</li>
+</li><code>%1</code> first segment (i.e. if no tabs present <code>%1</code> will be the same as <code>%0</code>)</li>
+<li><code>%2</code> second segment</li>
 <li>...</li></ul>
-Any %[digit] without correspoding segments will be stripped from the query.<br>
+Any <code>%[digit]</code> without correspoding segments will be stripped from the query.<br>
 <br>
-Example: Search term "a. vertebralis    5" and query "%1 maxn:%2" will result in "a. vertebralis maxn:5" as the searched query.
+Example: Search term <code>a. vertebralis    5</code> and query <code>%1 maxn:%2</code> will result in <code>a. vertebralis maxn:5</code> as the searched query.
 """

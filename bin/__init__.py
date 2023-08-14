@@ -27,7 +27,7 @@ elif qtmajor == 5:
 from . import imghdr
 
 CVER = get_version()
-NVER = "1.1.0"
+NVER = "1.2.0"
 engines: dict[str, Engine]
 
 class ListDialog(QDialog):
@@ -122,88 +122,99 @@ class MainDialog(QDialog):
         """
         Main dialog window "destructor" - actual destructor too late
         """
-        self.save_config()
+        self.save_state()
 
 
     def load_config(self):
         """
-        Load configuration from config Dict (from Anki config file normally)
+        Load configuration
         """
         config = mw.addonManager.getConfig(__name__)
+
+        # Setup engines
         self.engines = load_engines()
-        self.engine = self.engines[config.get(ENGINE, DEFAULT_ENGINE)](self.logger, config)
+        self.engine = self.engines[config.get(CFG_ENGINE, CFG_DEFAULT)](self.logger, config)
         self.ui.query_legend.setText(QUERY_LEGEND + (f', {self.engine.legend()}' if self.engine.legend() else ''))
         self.ui.query_tpl.setToolTip(QUERY_TIP + (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else ''))
 
-        if config.get(GEOMETRY):
-            self.restoreGeometry(base64.b64decode(config[GEOMETRY]))
-        if config.get(SPLITTER):
-            self.ui.splitter.restoreState(base64.b64decode(config[SPLITTER]))
-        if config.get(THUMB_HEIGHT) and config.get(THUMB_WIDTH):
-            self.ui.image_lv.setIconSize(QSize(config[THUMB_WIDTH], config[THUMB_HEIGHT]))
-        if config.get(DIR):
-            self.last_dir = config[DIR]
-        if config.get(QUERY_TEMPLATE):
-            self.ui.query_tpl.setText(config[QUERY_TEMPLATE])
-        if config.get(DECK):
-            i = self.ui.deck.findData(config[DECK], flags=Qt.MatchFlag.MatchExactly)
-            if i != -1:
-                self.ui.deck.setCurrentIndex(i)
-        if config.get(NOTE):
-            i = self.ui.note.findData(config[NOTE], flags=Qt.MatchFlag.MatchExactly)
-            if i != -1:
-                self.ui.note.setCurrentIndex(i)
-        if config.get(IMG_HEIGHT):
-            self.img_h = config[IMG_HEIGHT]
-        if config.get(IMG_WIDTH):
-            self.img_w = config[IMG_WIDTH]
-        if config.get(CLOZE_TABLE):
-            self.cloze_table = config[CLOZE_TABLE]
-        if config.get(CLOZE_TD):
-            self.cloze_td = config[CLOZE_TD]
+        # Icon sizes
+        self.iconw = config.get(CFG_THUMBW, 200)
+        self.iconh = config.get(CFG_THUMBH, 200)
+        self.ui.image_lv.setIconSize(QSize(self.iconw, self.iconh))
 
-        # Fields
-        if config.get(TERM):
-            i = self.ui.term.findText(config[TERM])
-            if i != -1:
-                self.ui.term.setCurrentIndex(i)
-        if config.get(IMAGE):
-            i = self.ui.image.findText(config[IMAGE])
-            if i != -1:
-                self.ui.image.setCurrentIndex(i)
-        if config.get(IMGDLG_GEOMETRY):
-            self.img_dlg.restoreGeometry(base64.b64decode(config[IMGDLG_GEOMETRY]))
+        # Image size
+        if v := config.get(CFG_IMGH):
+            self.img_h = v
+        if v := config.get(CFG_IMGW):
+            self.img_w = v
+        
+        # Cloze formating
+        if v := config.get(CFG_CLOZE_TABLE):
+            self.cloze_table = v
+        if v := config.get(CFG_CLOZE_TD):
+            self.cloze_td = v
 
         # Shortcuts
-        if config.get(SC_TERM_UP):
-            sc = QShortcut(QKeySequence(config[SC_TERM_UP]), self)
-            sc.activated.connect(lambda: self.ui.term_lv.setCurrentRow(self.ui.term_lv.currentRow() - 1) if self.ui.term_lv.currentRow() else None)
-        if config.get(SC_TERM_DOWN):
-            sc = QShortcut(QKeySequence(config[SC_TERM_DOWN]), self)
-            sc.activated.connect(lambda: self.ui.term_lv.setCurrentRow(self.ui.term_lv.currentRow() + 1) if self.ui.term_lv.currentRow() < self.ui.term_lv.count() - 1 else None)
+        if v := config.get(CFG_SC_PREV):
+            sc = QShortcut(QKeySequence(v), self)
+            sc.activated.connect(
+                lambda: self.ui.term_lv.setCurrentRow(
+                    self.ui.term_lv.currentRow() - 1
+                ) if self.ui.term_lv.currentRow() else None
+            )
+        if v := config.get(CFG_SC_NEXT):
+            sc = QShortcut(QKeySequence(v), self)
+            sc.activated.connect(
+                lambda: self.ui.term_lv.setCurrentRow(
+                    self.ui.term_lv.currentRow() + 1
+                ) if self.ui.term_lv.currentRow() < self.ui.term_lv.count() - 1 else None
+            )
 
-    def save_config(self):
+        # Styling
+        if theme_manager.night_mode:
+            self.ui.image_lv.setStyleSheet(config[CFG_DARK])
+        else:
+            self.ui.image_lv.setStyleSheet(config[CFG_LIGHT])
+
+        # Internal state
+        state = config[CFG_STATE]
+        if v := state[CFG_GEOMETRY]:
+            self.restoreGeometry(base64.b64decode(v))
+        if v := state[CFG_SPLITTER]:
+            self.ui.splitter.restoreState(base64.b64decode(v))
+        if v := state[CFG_IMGDLG_GEOMETRY]:
+            self.img_dlg.restoreGeometry(base64.b64decode(v))
+        if v := state[CFG_DIR]:
+            self.last_dir = v
+        if v := state[CFG_DECK]:
+            i = self.ui.deck.findData(v, flags=Qt.MatchFlag.MatchExactly)
+            if i != -1: self.ui.deck.setCurrentIndex(i)
+        if v := state[CFG_NOTE]:
+            i = self.ui.note.findData(v, flags=Qt.MatchFlag.MatchExactly)
+            if i != -1: self.ui.note.setCurrentIndex(i)
+        if v := state[CFG_TERM]:
+            i = self.ui.term.findText(v)
+            if i != -1: self.ui.term.setCurrentIndex(i)
+        if v := state[CFG_IMAGE]:
+            i = self.ui.image.findText(v)
+            if i != -1: self.ui.image.setCurrentIndex(i)
+        self.ui.query_tpl.setText(state.get(CFG_TEMPLATE, ''))
+
+    def save_state(self):
         """
-        Save current configuration to file
+        Save current state to file
         """
-        icon_size = self.ui.image_lv.iconSize()
-        config = {
-            GEOMETRY: base64.b64encode(self.saveGeometry()).decode('utf-8'),
-            SPLITTER: base64.b64encode(self.ui.splitter.saveState()).decode('utf-8'),
-            THUMB_HEIGHT: icon_size.height(),
-            THUMB_WIDTH: icon_size.width(),
-            QUERY_TEMPLATE: self.ui.query_tpl.text(),
-            DECK: self.ui.deck.currentData(),
-            NOTE: self.ui.note.currentData(),
-            IMG_HEIGHT: self.img_h,
-            IMG_WIDTH: self.img_w,
-            CLOZE_TABLE: self.cloze_table,
-            CLOZE_TD: self.cloze_td,
-            DIR: self.last_dir,
-            TERM: self.ui.term.currentText(),
-            IMAGE: self.ui.image.currentText(),
-            IMGDLG_GEOMETRY: base64.b64encode(self.img_dlg.saveGeometry()).decode('utf-8'),
-            ENGINE: self.engine.title()
+        config = mw.addonManager.getConfig(__name__)
+        config[CFG_STATE] = {
+            CFG_GEOMETRY: base64.b64encode(self.saveGeometry()).decode('utf-8'),
+            CFG_SPLITTER: base64.b64encode(self.ui.splitter.saveState()).decode('utf-8'),
+            CFG_IMGDLG_GEOMETRY: base64.b64encode(self.img_dlg.saveGeometry()).decode('utf-8'),
+            CFG_DIR: self.last_dir,
+            CFG_DECK: self.ui.deck.currentData(),
+            CFG_NOTE: self.ui.note.currentData(),
+            CFG_TERM: self.ui.term.currentText(),
+            CFG_IMAGE: self.ui.image.currentText(),
+            CFG_TEMPLATE: self.ui.query_tpl.text()
         }
         mw.addonManager.writeConfig(__name__, config)
 
@@ -255,6 +266,23 @@ class MainDialog(QDialog):
         """
         Term selected - store old image selection and setup new
         """
+
+        def scale(file: str):
+            # Create a new QImage with desired size, initialized to transparent color
+            pixmap = QPixmap(file).scaled(
+                self.iconw,
+                self.iconh,
+                Qt.AspectRatioMode.KeepAspectRatio
+            )
+            img = QImage(self.iconw, self.iconh, QImage.Format.Format_ARGB32)
+            img.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(img)
+            x = (self.iconw - pixmap.width()) / 2
+            y = (self.iconh - pixmap.height()) / 2
+            painter.drawPixmap(x, y, pixmap)
+            painter.end()
+            return QPixmap.fromImage(img)
+
         if self.ui.image_lv.isEnabled():
             # Store previous selection then clear image lv
             self.store_image_selection()
@@ -266,7 +294,7 @@ class MainDialog(QDialog):
                     if match.file:
                         img_itm = QListWidgetItem(match.title)
                         img_itm.setData(TERM_ROLE, i)
-                        img_itm.setIcon(QIcon(match.file))
+                        img_itm.setIcon(QIcon(scale(match.file)))
                         img_itm.setToolTip(match.url)
                         self.ui.image_lv.addItem(img_itm)
                         if ii == 0: # Needs to be done before setSeleced to avoid toggle
@@ -306,7 +334,7 @@ class MainDialog(QDialog):
             geom = self.img_dlg.geometry()
             self.img_dlg_ui.gfx.setPixmap(
                 QPixmap(self.terms[term_index].matches[match_index].file)
-                .scaled(geom.width(), geom.height(), Qt.KeepAspectRatio)
+                .scaled(geom.width(), geom.height(), Qt.AspectRatioMode.KeepAspectRatio)
             )
             self.img_dlg.show()
 
@@ -360,26 +388,24 @@ class MainDialog(QDialog):
                 dir=self.tmp_dir.name,
                 delete=False
             )
-            print(f'about to curl to {tmp.name}')
             proc_info = subprocess.run(
                 [
                     CURL,
-                    '-X', 'GET',
-                    url,
                     '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36, Accept-Encoding:gzip,deflate',
-                    '-w', '%{http_code}',
-                    '-L',
-                    '-o', tmp.name 
+                    '--connect-timeout', '5',
+                    '-o', tmp.name,
+                    '-L',                   # follow redirect
+                    '-s',                   # silent
+                    '-w', '%{http_code}',   # write final status_code to stdout
+                    '-X', 'GET', url
                 ],
                 stdout=subprocess.PIPE,
-                universal_newlines=True,
-                shell=True
+                universal_newlines=True
             )
             try:
                 code = int(proc_info.stdout.strip())
             except:
                 code = 400
-            print(f'curl returned: {code} ({type(code)})')
             return (code, tmp.name)
 
         def requests_download(url: str):
@@ -423,7 +449,6 @@ class MainDialog(QDialog):
                 timeout = 15,
                 verify=False
             )
-            #print(f'downloading {match} - got {res}')
             if res.status_code != 200:
                 self.logger.info(f"Non-200 return|match: {match}")
                 return (res.status_code, None)
@@ -443,7 +468,6 @@ class MainDialog(QDialog):
             for chunk in res: tmp.file.write(chunk)
             return (res.status_code, tmp.name)
 
-
         if not self.terms: return
 
         # Confirm with user
@@ -457,9 +481,13 @@ class MainDialog(QDialog):
         if dlg.exec() != 1: return
         
         # Setup
-        progress = QProgressDialog(parent=self, labelText="Getting images...", minimum=0, maximum=len(self.terms))
+        progress = QProgressDialog(parent=self, minimum=0, maximum=len(self.terms))
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setFixedWidth(400)
+        lbl = QLabel(progress)
+        lbl.setFixedWidth(400)
+        lbl.setText('Getting images...')
+        progress.setLabel(lbl)
         progress.setAutoClose(False)
         progress.forceShow()
         mw.app.processEvents()
@@ -498,7 +526,6 @@ class MainDialog(QDialog):
             matches = []
             skipped = []
             for match in term.matches:
-                print(f'Downloading {match.url}')
                 progress.setLabelText(f'Downloading `{match.url}`...')
                 progress.setValue(i)
                 mw.app.processEvents()
@@ -520,13 +547,6 @@ class MainDialog(QDialog):
             if skipped:
                 all_skipped[term.term] = skipped
         progress.setValue(cnt)
-
-        # DEBUG
-        print("Downloaded:")
-        for t in self.terms:
-            print(f"  {t.term}")
-            for m in t.matches:
-                print(f"    {m.file}")
 
         # Update GUI
         self.ui.generate.setEnabled(True)
@@ -671,6 +691,26 @@ def init():
         action.setShortcut(sc)
     action.triggered.connect(lambda: MainDialog())
     mw.form.menuTools.addAction(action)
+    
+    # config/meta.json format changed in 1.2.0
+    if strvercmp(CVER, '1.2.0') < 0:
+        # Update meta.json format
+        if meta := mw.addonManager.addonMeta(os.path.dirname(__file__)):
+            state = {
+                CFG_GEOMETRY: meta['config'].pop(CFG_GEOMETRY, ''),
+                CFG_SPLITTER: meta['config'].pop(CFG_SPLITTER, ''),
+                CFG_IMGDLG_GEOMETRY: meta['config'].pop(CFG_IMGDLG_GEOMETRY, ''),
+                CFG_DIR: meta['config'].pop(CFG_DIR, ''),
+                CFG_DECK: meta['config'].pop(CFG_DECK, ''),
+                CFG_NOTE: meta['config'].pop(CFG_NOTE, ''),
+                CFG_TERM: meta['config'].pop(CFG_TERM, ''),
+                CFG_IMAGE: meta['config'].pop(CFG_IMAGE, ''),
+                CFG_TEMPLATE: meta['config'].pop(CFG_TEMPLATE, '')
+            }
+            meta['config'][CFG_STATE] = state
+            # Use legacy to overwrite config changes
+            mw.addonManager.writeAddonMeta(os.path.dirname(__file__), meta)
+
     if strvercmp(CVER, NVER) < 0:
         set_version(NVER)
 
