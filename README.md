@@ -17,7 +17,7 @@ Edit the search terms manually, in the Enter/paste window or load them from a te
 - Ctrl+return will close (accept) the Enter/Paste window, escape will cancel.
 - When new terms are loaded (even if they are the same as the old ones) all downloaded fi.e. are removed (of course everything that has already been generated to notes is retai.e. inside Anki).
 
-![Step 2](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/1.jpeg?raw=true){height="400"}
+![Step 2](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/1.jpeg?raw=true{height="400"})
 
 ## 2. Specify search query template and run the query
 
@@ -52,7 +52,7 @@ Select (so that they are highlighted) the relevant images for each term (S2N rem
 - A zoom view is available by right click/return on a thumbnail. Escape, return, right and left click closes the zoom window (it can also be left open).
 - The size of the images in the thumbnail view can be set in the config.
 
-![Step 3](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/2.png?raw=true){height="400"}
+![Step 3](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/2.png?raw=true{height="400"})
 
 ## 4. Specify note generation details
 
@@ -63,7 +63,7 @@ Select deck, note type, and in which field the terms and images go respectively 
 - For cloze style notes one note of the specified type will be generated and each term/image inserted as a cloze, either with the term as prompt and the image(s) inside the cloze or vice versa. With the term as prompt the clozes will be inserted with a line break between each "pair". With the image(s) as prompt the clozes will be inserted as a table (table attributes adjustable in the config, i.e. you can insert style="color: red;" or add a CSS class etc.) to be able to see which images and cloze belong together.
 - Once generated a dialog will list any terms that did not get any notes/clozes (because no images were found in the search or no images were selected) to allow copying those to run another query on or create those notes some other way.
 
-![Step 4](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/3.png?raw=true){height="400"}
+![Step 4](https://github.com/TRIAEIOU/Search-to-notes/blob/main/Screenshots/3.png?raw=true{height="400"})
 
 ## Configuration
 
@@ -72,12 +72,12 @@ Configuration is made through the addon configuration dialog:
 - `Engine`: Which search engine implementation to use, shipped alternatives are `Google` and `DuckDuckGo (API)`.
 - `Shortcut open`: Shortcut to open the `Search to notes` dialog from the Anki main window.
 - `Shortcut next/previous term`: Shortcut to move down/up in the list of terms in the `Search to notes` main window.
+- `Shortcut close`: Shortcut to close `Search to notes` main window.
 - `Thumbnail height/width`: Dimensions of the thumbnails in the `Search to notes` main window.
 - `Image height/width`: Dimensions to scale images to when generating notes.
 - `Cloze <table>/<td> attributes`: Attributes added to `<table>`/`<td>` tags when generating cloze notes, for instance to apply some sort of styling (`style="border: 1px solid black; border-collapse: collapse;"`) or a class (`class="my-own-styling-class"`).
 - `Listview light mode`/`Listview dark mode`: Styling (notably of how the current as well as selected images are hightlighted) depending on light or dark mode.
 - `Internal state`: Addon internal state, do not edit.
-
 
 ## Remarks
 

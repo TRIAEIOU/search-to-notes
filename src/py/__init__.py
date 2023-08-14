@@ -1,7 +1,7 @@
 """
 Search to notes main application
 """
-import os, codecs, tempfile, requests, base64, time, logging, ssl, urllib3, subprocess
+import os, codecs, tempfile, requests, base64, time, logging, ssl, subprocess
 from collections import OrderedDict
 from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
@@ -21,9 +21,9 @@ else:
     CURL = "curl" if shutil.which('curl') else None
 
 if qtmajor == 6:
-    from . import maindialog_qt6 as ui_maindialog, enterdialog_qt6 as ui_enterdialog, imagedialog_qt6 as ui_imagedialog, listdialog_qt6 as ui_listdialog
+    from . import mainwindow_qt6 as ui_mainwindow, enterdialog_qt6 as ui_enterdialog, imagedialog_qt6 as ui_imagedialog, listdialog_qt6 as ui_listdialog
 elif qtmajor == 5:
-    from . import maindialog_qt5 as ui_maindialog, enterdialog_qt5 as ui_enterdialog, imagedialog_qt5 as ui_imagedialog, listdialog_qt5 as ui_listdialog
+    from . import mainwindow_qt5 as ui_mainwindow, enterdialog_qt5 as ui_enterdialog, imagedialog_qt5 as ui_imagedialog, listdialog_qt5 as ui_listdialog
 from . import imghdr
 
 CVER = get_version()
@@ -53,7 +53,7 @@ class ListDialog(QDialog):
 
 
 
-class MainDialog(QDialog):
+class MainWindow(QMainWindow):
     """
     Main window
     """
@@ -74,8 +74,8 @@ class MainDialog(QDialog):
         """
         Main add-on window
         """
-        QDialog.__init__(self, mw)
-        self.ui = ui_maindialog.Ui_MainDialog()
+        super().__init__(None, Qt.WindowType.Window)
+        self.ui = ui_mainwindow.Ui_mainwindow()
         self.ui.setupUi(self)
         self.setWindowTitle(TITLE)
 
@@ -115,7 +115,8 @@ class MainDialog(QDialog):
 
         # Load user config and restore states
         self.load_config()
-        self.exec()
+        self.show()
+        #self.exec()
 
 
     def closeEvent(self, event):
@@ -169,6 +170,9 @@ class MainDialog(QDialog):
                     self.ui.term_lv.currentRow() + 1
                 ) if self.ui.term_lv.currentRow() < self.ui.term_lv.count() - 1 else None
             )
+        if v := config.get(CFG_SC_CLOSE):
+            sc = QShortcut(QKeySequence(v), self)
+            sc.activated.connect(self.close)
 
         # Styling
         if theme_manager.night_mode:
@@ -472,9 +476,10 @@ class MainDialog(QDialog):
 
         # Confirm with user
         template = self.ui.query_tpl.text()
-        html = '<b>Run the following queries?</b><br><table style="border: 1px solid black; border-collapse: collapse;" width="100%">'
+        border = '#D3D3D3' if theme_manager.night_mode else '#808080'
+        html = f'<b>Run the following queries?</b><br><table width="100%">'
         for term in self.terms:
-            html += f'<tr><td style="border: 1px solid black; padding: 5px; white-space:nowrap;">{term.term}</td><td style="border: 1px solid black; padding: 5px;" width="100%">{term.query(template)}</td></tr>'
+            html += f'<tr><td style="padding: 5px; white-space:nowrap;">{term.term}:</td><td style="padding: 5px; padding-left: 10px;" width="100%">{term.query(template)}</td></tr>'
         html += '</table>'
         dlg = ListDialog(self, "Run search query", html)
         dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
@@ -689,7 +694,7 @@ def init():
     action = QAction(LABEL, mw)
     if sc := mw.addonManager.getConfig(__name__).get('Shortcut open'):
         action.setShortcut(sc)
-    action.triggered.connect(lambda: MainDialog())
+    action.triggered.connect(lambda: MainWindow())
     mw.form.menuTools.addAction(action)
     
     # config/meta.json format changed in 1.2.0

@@ -18,6 +18,7 @@ CFG_CLOZE_TABLE = "Cloze <table> attributes"
 CFG_CLOZE_TD = "Cloze <td> attributes"
 CFG_SC_PREV = "Shortcut previous term"
 CFG_SC_NEXT = "Shortcut next term"
+CFG_SC_CLOSE = "Shortcut close"
 CFG_LIGHT = "Listview dark mode"
 CFG_DARK = "Listview dark mode"
 
