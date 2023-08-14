@@ -76,6 +76,7 @@ Configuration is made through the addon configuration dialog:
 - `Image height/width`: Dimensions to scale images to when generating notes.
 - `Cloze <table>/<td> attributes`: Attributes added to `<table>`/`<td>` tags when generating cloze notes, for instance to apply some sort of styling (`style="border: 1px solid black; border-collapse: collapse;"`) or a class (`class="my-own-styling-class"`).
 - `Listview light mode`/`Listview dark mode`: Styling (notably of how the current as well as selected images are hightlighted) depending on light or dark mode.
+- `Internal state`: Addon internal state, do not edit.
 
 
 ## Remarks
