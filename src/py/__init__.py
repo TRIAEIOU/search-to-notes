@@ -93,11 +93,14 @@ class MainWindow(QMainWindow):
         sc.activated.connect(self.ui.generate.click)
 
         # Main window population from collection
-        decks = mw.col.decks.all_names_and_ids(skip_empty_default=False, include_filtered=False)
-        for deck in decks:
+        self.ui.deck.setToolTip(STR_DECK_TIP)
+        for deck in mw.col.decks.all_names_and_ids(
+            skip_empty_default=False,
+            include_filtered=False
+        ):
             self.ui.deck.addItem(deck.name, deck.id)
-        note_types = mw.col.models.all_names_and_ids()
-        for note_type in note_types:
+        self.ui.note.setToolTip(STR_TYPE_TIP)
+        for note_type in mw.col.models.all_names_and_ids():
             self.ui.note.addItem(note_type.name, note_type.id)
         self.select_note_type()
         for prompt in CLOZE_PROMPTS:
@@ -135,8 +138,16 @@ class MainWindow(QMainWindow):
         # Setup engines
         self.engines = load_engines()
         self.engine = self.engines[config.get(CFG_ENGINE, CFG_DEFAULT)](self.logger, config)
-        self.ui.query_legend.setText(QUERY_LEGEND + (f', {self.engine.legend()}' if self.engine.legend() else ''))
-        self.ui.query_tpl.setToolTip(QUERY_TIP + (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else ''))
+        self.ui.query_legend.setText(
+            (f'{self.engine.title()}: ' if self.engine.title() else '') +
+            QUERY_LEGEND +
+            (f', {self.engine.legend()}' if self.engine.legend() else '')
+        )
+        self.ui.query_tpl.setToolTip(
+            (f'{self.engine.title()}: ' if self.engine.title() else '') +
+            QUERY_TIP +
+            (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else '')
+        )
 
         # Icon sizes
         self.iconw = config.get(CFG_THUMBW, 200)
@@ -236,7 +247,7 @@ class MainWindow(QMainWindow):
         """
         Button press to open Open File dialog
         """
-        (path, filt) = QFileDialog.getOpenFileName(self, "Select file", self.last_dir, "Text files (*.txt)")
+        (path, filt) = QFileDialog.getOpenFileName(self, STR_SELECT_TITLE, self.last_dir, STR_SELECT_FILTER)
         if path:
             with codecs.open(path, encoding='utf-8') as fh:
                 file = fh.read().strip()
@@ -363,15 +374,21 @@ class MainWindow(QMainWindow):
         self.ui.term.clear()
         self.ui.image.clear()
         if note['type'] == consts.MODEL_CLOZE:
-            self.ui.term_lbl.setText("Title field")
-            self.ui.image_lbl.setText("Cloze field")
+            self.ui.prompt.setToolTip(STR_PROMPT_TIP)
+            self.ui.term_lbl.setText(STR_TITLE_FLD_LBL)
+            self.ui.term.setToolTip(STR_TITLE_FLD_TIP)
+            self.ui.title.setToolTip(STR_TITLE_TIP)
+            self.ui.image_lbl.setText(STR_CLOZE_LBL)
+            self.ui.image.setToolTip(STR_CLOZE_TIP)
             self.ui.term.addItem(NO_TITLE)
             self.ui.prompt_lbl.show()
             self.ui.prompt.show()
             self.ui.title.show()
         else:
-            self.ui.term_lbl.setText("Term field")
-            self.ui.image_lbl.setText("Image field")
+            self.ui.term_lbl.setText(STR_TERM_LBL)
+            self.ui.term.setToolTip(STR_TERM_TIP)
+            self.ui.image_lbl.setText(STR_IMG_LBL)
+            self.ui.image.setToolTip(STR_IMG_TIP)
             self.ui.prompt_lbl.hide()
             self.ui.prompt.hide()
             self.ui.title.hide()
@@ -477,11 +494,11 @@ class MainWindow(QMainWindow):
         # Confirm with user
         template = self.ui.query_tpl.text()
         border = '#D3D3D3' if theme_manager.night_mode else '#808080'
-        html = f'<b>Run the following queries?</b><br><table width="100%">'
+        html = f'<b>{STR_RUN_CONFIRM_TEXT}</b><br><table width="100%">'
         for term in self.terms:
             html += f'<tr><td style="padding: 5px; white-space:nowrap;">{term.term}:</td><td style="padding: 5px; padding-left: 10px;" width="100%">{term.query(template)}</td></tr>'
         html += '</table>'
-        dlg = ListDialog(self, "Run search query", html)
+        dlg = ListDialog(self, STR_RUN_CONFIRM_TITLE, html)
         dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         if dlg.exec() != 1: return
         
@@ -491,7 +508,7 @@ class MainWindow(QMainWindow):
         progress.setFixedWidth(400)
         lbl = QLabel(progress)
         lbl.setFixedWidth(400)
-        lbl.setText('Getting images...')
+        lbl.setText(STR_QUERY_IMGS)
         progress.setLabel(lbl)
         progress.setAutoClose(False)
         progress.forceShow()
@@ -502,13 +519,13 @@ class MainWindow(QMainWindow):
         cnt = 0
         for i, term in enumerate(self.terms):
             query = term.query(template)
-            progress.setLabelText(f'Searching `{query}`...')
+            progress.setLabelText(STR_QUERY_SEARCH % {'query': query})
             progress.setValue(i)
             mw.app.processEvents()
             if progress.wasCanceled(): return
             term.matches = self.engine.search(query)
             if term.matches is None:
-                msg = f'{self.engine.title()} search for "{query}" returned None, search engine plugin broken?'
+                msg = STR_MATCH_NONE % {'engine': self.engine.title(), 'query': query}
                 self.logger.warning(msg)
                 raise Exception(msg)
             cnt += len(term.matches)
@@ -531,7 +548,7 @@ class MainWindow(QMainWindow):
             matches = []
             skipped = []
             for match in term.matches:
-                progress.setLabelText(f'Downloading `{match.url}`...')
+                progress.setLabelText(STR_DOWNLOADING % {'url': match.url})
                 progress.setValue(i)
                 mw.app.processEvents()
                 if progress.wasCanceled(): return
@@ -562,10 +579,11 @@ class MainWindow(QMainWindow):
 
         # Alert user to skipped images
         if all_skipped:
-            msg = f'The following images were found but not downloaded:'
+            msg = ''
             for k, v in all_skipped.items():
-                msg += f'\n{k}:\n  ' + "\n  ".join(v)
-            show_info(msg)
+                msg += f'{k}:<ul><li>{"</li><li>".join(v)}</li></ul>'
+            box = show_info(title=STR_DL_SKIPPED, text=msg, parent=self)
+            box.setTextFormat(Qt.TextFormat.RichText)
 
 
     def generate_notes(self):
@@ -667,18 +685,20 @@ class MainWindow(QMainWindow):
             """
             Run when background thread finishes - show result
             """
-            note_str = "cloze" if result.note_type == consts.MODEL_CLOZE else "note"
-            msg = f'<b>Note generation finished</b><br>{result.count} {note_str}(s) generated.</div>'
+            msg = STR_GEN_FINISHED % {
+                'count': result.count,
+                'type': 'cloze' if result.note_type == consts.MODEL_CLOZE else 'note'
+            }
             if result.skipped:
                 skipped = ""
-                msg += '<br><br><b>Items skipped</b><br>No notes generated for the following search terms (no search matches or no matches selected):<br><br>'
+                msg += f'<br><br>{STR_GEN_SKIPPED}<br><br>'
                 for term in result.skipped:
                     msg += f"{term}<br>\n"
                     skipped += f"{term}\n"
                     skipped.rstrip()
             dlg = ListDialog(self, TITLE, msg)
             if result.skipped:
-                copy = dlg.ui.buttonBox.addButton('Copy skipped to clipboard', QDialogButtonBox.ButtonRole.ApplyRole)
+                copy = dlg.ui.buttonBox.addButton(STR_SKIPPED_COPY, QDialogButtonBox.ButtonRole.ApplyRole)
                 copy.clicked.connect(lambda: QApplication.clipboard().setText(skipped))
             dlg.exec()
 
@@ -721,7 +741,7 @@ def init():
 
     # Ask user to post debug log 
     if os.path.exists(DEBUG_FILE) and (not os.path.exists(DEBUG_PROMPTED) or os.path.getmtime(DEBUG_FILE) > os.path.getmtime(DEBUG_PROMPTED)):
-        showInfo(f'Search to notes add-on has detected an error log, consider reviewing it for any privacy concerns and then post the contents to the add-on support thread (https://forums.ankiweb.net/t/search-to-notes-support-thread/16286) to help the author and other users. The debuglog can be found here: "{DEBUG_FILE}".')
+        show_info(text=STR_PROMPT_LOG)
         with open(DEBUG_PROMPTED, "w") as fh:
             fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(DEBUG_FILE)))))
 
