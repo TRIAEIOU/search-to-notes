@@ -111,7 +111,7 @@
         {
             "label": "Build update",
             "type": "shell",
-            "command": "Write-host Building update... ; rm -ea 0 -R -Force ./dist/*; rm -ea 0 -R -Force ./bin/__pycache__; Get-ChildItem -Path ./bin/*, ./README.md, ./LICENSE | Compress-Archive -ea 0 -Force -DestinationPath ./dist/update.zip; pandoc ./README.md -f markdown -o ./dist/update.txt -t ${env:CODEPATH}/Anki/addons/pandoc-anki-addon-writer/anki-addon.lua | Out-Null",
+            "command": "Write-host Building update... ; rm -ea 0 -R -Force ./dist/*; rm -ea 0 -R -Force ./bin/__pycache__; Get-ChildItem -Path ./bin/*, ./README.md, ./LICENSE | Where-Object {!($_.FullName -match (@('__pycache__', 'meta.json', '.archive') -join '|'))} | Compress-Archive -ea 0 -Force -DestinationPath ./dist/update.zip; pandoc ./README.md -f markdown -o ./dist/update.txt -t ${env:CODEPATH}/Anki/addons/pandoc-anki-addon-writer/anki-addon.lua | Out-Null",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
