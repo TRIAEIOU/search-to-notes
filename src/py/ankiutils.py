@@ -3,7 +3,7 @@ from dataclasses import fields, is_dataclass, asdict
 from types import GenericAlias
 from typing import TypeVar
 from aqt import mw
-
+from anki import lang
 
 # Versioning ######################################################################
 def strvercmp(left: str, right: str) -> int:
@@ -72,51 +72,15 @@ def write_config(config: type):
     """Write config dataclass to addon config.json"""
     mw.addonManager.writeConfig(dict_from_dc(config))
     
+class Translator:
+    pass
 
-'''
-class Config:
-    """Class to load/save config to dataclass"""
-    @classmethod
-    def load(self, class_: type):
-        cfg = mw.addonManager.getConfig(__name__)
-        cflds = fields(class_)
+# Translations ################################################
+def load_translation(translations: dict[str, dict[str, str]]):
+    """Load translation from dict: {'en_GB': {'some string': 'some other string'}}"""
+    current = lang.compatMap.get(lang.current_lang, lang.current_lang.replace('-', '_'))
+    t.lang = translations.get(current, {})
 
-        for k, v 
-
-        for k, v in fields(class_):
-
-
-        pass
-
-    def save(self, instance: type):
-        pass
-
-# Concept from https://stackoverflow.com/a/72164665
-class DataClass:
-    """Class to convert dict into dataclass, caching recognized classes"""
-    _cache = {}
-
-    @classmethod
-    def from_dict(self, class_: type, dict_: dict):
-        """Static method to instantiate a dataclass from dict"""
-        if class_ not in self._cache:
-            self._cache[class_] = {f.name for f in fields(class_) if f.init}
-
-        fields = self._cache[class_]
-        classd = {}
-        nclassd = {}
-        for k, v in dict_.items():
-            if k in fields:
-                classd[k] = v
-            else:
-                nclassd[k] = v
-
-        classi = class_(**classd)
-        setattr(classi, '___remainder___', nclassd)
-        return classi
-
-    @classmethod
-    def to_dict(self, instance: type):
-        """Static method to convert dataclass to dict, restoring non-dataclass fields"""
-        return {f for f in fields(instance)} | getattr(instance, '___remainder___')
-'''
+def t(string: str):
+    """Translate given string using the current language."""
+    return t.lang.get(string, string)

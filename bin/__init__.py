@@ -14,6 +14,7 @@ from anki import consts, collection
 from .consts import *
 from .engine import *
 from .ankiutils import *
+from .translations import translations
 
 if sys.platform == 'win32' or sys.platform == 'cygwin':
     CURL = "curl.exe" if shutil.which('curl.exe') else None
@@ -77,7 +78,7 @@ class MainWindow(QMainWindow):
         super().__init__(None, Qt.WindowType.Window)
         self.ui = ui_mainwindow.Ui_mainwindow()
         self.ui.setupUi(self)
-        self.setWindowTitle(TITLE)
+        self.setWindowTitle(t('Search to notes'))
 
         # Signals & slots
         self.ui.note.currentTextChanged.connect(self.select_note_type)
@@ -93,18 +94,24 @@ class MainWindow(QMainWindow):
         sc.activated.connect(self.ui.generate.click)
 
         # Main window population from collection
-        self.ui.deck.setToolTip(STR_DECK_TIP)
+        self.ui.deck.setToolTip(t('Deck to insert generated notes in.'))
         for deck in mw.col.decks.all_names_and_ids(
             skip_empty_default=False,
             include_filtered=False
         ):
             self.ui.deck.addItem(deck.name, deck.id)
-        self.ui.note.setToolTip(STR_TYPE_TIP)
+        self.ui.note.setToolTip(t('Which type of note to generate.'))
         for note_type in mw.col.models.all_names_and_ids():
             self.ui.note.addItem(note_type.name, note_type.id)
         self.select_note_type()
-        for prompt in CLOZE_PROMPTS:
-            self.ui.prompt.addItem(prompt['label'], prompt['prompt'])
+        self.ui.prompt.addItem(
+            t('Term prompt/clozed image(s)'),
+            CLOZE_PROMPT_TERM
+        )
+        self.ui.prompt.addItem(
+            t('Image(s) prompt/clozed term in table'),
+            CLOZE_PROMPT_IMAGE
+        )
 
         # Image zoom window
         self.img_dlg = QDialog(self)
@@ -140,12 +147,21 @@ class MainWindow(QMainWindow):
         self.engine = self.engines[config.get(CFG_ENGINE, CFG_DEFAULT)](self.logger, config)
         self.ui.query_legend.setText(
             (f'{self.engine.title()}: ' if self.engine.title() else '') +
-            QUERY_LEGEND +
+            t('<code>%0</code>: complete term, <code>%1</code>: first tab separated part, ...') +
             (f', {self.engine.legend()}' if self.engine.legend() else '')
         )
         self.ui.query_tpl.setToolTip(
             (f'{self.engine.title()}: ' if self.engine.title() else '') +
-            QUERY_TIP +
+            t(
+                '<b>QUERY TEMPLATE SYNTAX</b><br>'
+                'Search terms will be split on tab character and <code>%[digit]</code> in the search query substituted with corresponding segments:'
+                '<ul><li><code>%0</code>: complete term</li>'
+                '<li><code>%1</code> first segment (i.e. if no tabs present <code>%1</code> will be the same as <code>%0</code>)</li>'
+                '<li><code>%2</code> second segment</li>'
+                '<li>...</li></ul>'
+                'Any <code>%[digit]</code> without correspoding segments will be stripped from the query.<br><br>'
+                'Example: Search term <code>a. vertebralis    5</code> and query <code>%1 maxn:%2</code> will result in <code>a. vertebralis maxn:5</code> as the searched query.'
+            ) +
             (f'<br><br>{self.engine.tooltip()}' if self.engine.tooltip() else '')
         )
 
@@ -247,7 +263,7 @@ class MainWindow(QMainWindow):
         """
         Button press to open Open File dialog
         """
-        (path, filt) = QFileDialog.getOpenFileName(self, STR_SELECT_TITLE, self.last_dir, STR_SELECT_FILTER)
+        (path, filt) = QFileDialog.getOpenFileName(self, t('Select file'), self.last_dir, t('Text files (*.txt)'))
         if path:
             with codecs.open(path, encoding='utf-8') as fh:
                 file = fh.read().strip()
@@ -374,21 +390,21 @@ class MainWindow(QMainWindow):
         self.ui.term.clear()
         self.ui.image.clear()
         if note['type'] == consts.MODEL_CLOZE:
-            self.ui.prompt.setToolTip(STR_PROMPT_TIP)
-            self.ui.term_lbl.setText(STR_TITLE_FLD_LBL)
-            self.ui.term.setToolTip(STR_TITLE_FLD_TIP)
-            self.ui.title.setToolTip(STR_TITLE_TIP)
-            self.ui.image_lbl.setText(STR_CLOZE_LBL)
-            self.ui.image.setToolTip(STR_CLOZE_TIP)
-            self.ui.term.addItem(NO_TITLE)
+            self.ui.prompt.setToolTip(t('Whether to use search term as "prompt" and images as "answers" (in cloze)<ul><li><code>Term prompt/clozed image(s)</code>: Each search term will be followed by a cloze containing the selected images.</li><li><code>Image(s) prompt/clozed term in table</code>: Generates a table with one row per search term. All selected images will be visible in the left column and the search term will be inside a cloze in the right column.</li></ul>'))
+            self.ui.term_lbl.setText(t('Title field'))
+            self.ui.term.setToolTip(t('Note field into which the title (configured on right) should be inserted. Select <code>&lt;none&gt;</code> for no title insertion.'))
+            self.ui.title.setToolTip(t('Title to insert in supplied field (configured on left).'))
+            self.ui.image_lbl.setText(t('Cloze field'))
+            self.ui.image.setToolTip(t('Field to insert the clozes and their respective prompt in (configured on left).'))
+            self.ui.term.addItem(t('<none>'))
             self.ui.prompt_lbl.show()
             self.ui.prompt.show()
             self.ui.title.show()
         else:
-            self.ui.term_lbl.setText(STR_TERM_LBL)
-            self.ui.term.setToolTip(STR_TERM_TIP)
-            self.ui.image_lbl.setText(STR_IMG_LBL)
-            self.ui.image.setToolTip(STR_IMG_TIP)
+            self.ui.term_lbl.setText(t('Term field'))
+            self.ui.term.setToolTip(t('Note field into which the search term should be inserted.'))
+            self.ui.image_lbl.setText(t('Image field'))
+            self.ui.image.setToolTip(t('Note field into which the selected images should be inserted.'))
             self.ui.prompt_lbl.hide()
             self.ui.prompt.hide()
             self.ui.title.hide()
@@ -494,11 +510,11 @@ class MainWindow(QMainWindow):
         # Confirm with user
         template = self.ui.query_tpl.text()
         border = '#D3D3D3' if theme_manager.night_mode else '#808080'
-        html = f'<b>{STR_RUN_CONFIRM_TEXT}</b><br><table width="100%">'
+        html = f'<b>{t("Run the following queries?")}</b><br><table width="100%">'
         for term in self.terms:
             html += f'<tr><td style="padding: 5px; white-space:nowrap;">{term.term}:</td><td style="padding: 5px; padding-left: 10px;" width="100%">{term.query(template)}</td></tr>'
         html += '</table>'
-        dlg = ListDialog(self, STR_RUN_CONFIRM_TITLE, html)
+        dlg = ListDialog(self, t('Run search queries'), html)
         dlg.ui.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         if dlg.exec() != 1: return
         
@@ -508,7 +524,7 @@ class MainWindow(QMainWindow):
         progress.setFixedWidth(400)
         lbl = QLabel(progress)
         lbl.setFixedWidth(400)
-        lbl.setText(STR_QUERY_IMGS)
+        lbl.setText(t('Getting images...'))
         progress.setLabel(lbl)
         progress.setAutoClose(False)
         progress.forceShow()
@@ -519,13 +535,13 @@ class MainWindow(QMainWindow):
         cnt = 0
         for i, term in enumerate(self.terms):
             query = term.query(template)
-            progress.setLabelText(STR_QUERY_SEARCH % {'query': query})
+            progress.setLabelText(t('Searching %(query)s...') % {'query': query})
             progress.setValue(i)
             mw.app.processEvents()
             if progress.wasCanceled(): return
             term.matches = self.engine.search(query)
             if term.matches is None:
-                msg = STR_MATCH_NONE % {'engine': self.engine.title(), 'query': query}
+                msg = t('%(engine)s search for "%(query)s" returned None, search engine plugin broken?') % {'engine': self.engine.title(), 'query': query}
                 self.logger.warning(msg)
                 raise Exception(msg)
             cnt += len(term.matches)
@@ -548,7 +564,7 @@ class MainWindow(QMainWindow):
             matches = []
             skipped = []
             for match in term.matches:
-                progress.setLabelText(STR_DOWNLOADING % {'url': match.url})
+                progress.setLabelText(t('Downloading `%(url)s`...') % {'url': match.url})
                 progress.setValue(i)
                 mw.app.processEvents()
                 if progress.wasCanceled(): return
@@ -582,7 +598,7 @@ class MainWindow(QMainWindow):
             msg = ''
             for k, v in all_skipped.items():
                 msg += f'{k}:<ul><li>{"</li><li>".join(v)}</li></ul>'
-            box = show_info(title=STR_DL_SKIPPED, text=msg, parent=self)
+            box = show_info(title=t('The following images were found but not downloaded'), text=msg, parent=self)
             box.setTextFormat(Qt.TextFormat.RichText)
 
 
@@ -639,7 +655,7 @@ class MainWindow(QMainWindow):
                     note = mw.col.new_note(note_t)
                     if prompt == CLOZE_PROMPT_IMAGE:
                         content = f"<table {self.cloze_table}>{content}</table>"
-                    if term_fld != NO_TITLE:
+                    if term_fld != t('<none>'):
                         note[term_fld] = title
                     note[image_fld] = content
                     # Fixme: correct way to store changes
@@ -685,20 +701,20 @@ class MainWindow(QMainWindow):
             """
             Run when background thread finishes - show result
             """
-            msg = STR_GEN_FINISHED % {
+            msg = t('<b>Note generation finished</b><br>%(count)d %(type)s(s) generated.</div>') % {
                 'count': result.count,
                 'type': 'cloze' if result.note_type == consts.MODEL_CLOZE else 'note'
             }
             if result.skipped:
                 skipped = ""
-                msg += f'<br><br>{STR_GEN_SKIPPED}<br><br>'
+                msg += f'<br><br>{t("<b>Items skipped</b><br>No notes generated for the following search terms (no search matches or no matches selected):")}<br><br>'
                 for term in result.skipped:
                     msg += f"{term}<br>\n"
                     skipped += f"{term}\n"
                     skipped.rstrip()
-            dlg = ListDialog(self, TITLE, msg)
+            dlg = ListDialog(self, t('Search to notes'), msg)
             if result.skipped:
-                copy = dlg.ui.buttonBox.addButton(STR_SKIPPED_COPY, QDialogButtonBox.ButtonRole.ApplyRole)
+                copy = dlg.ui.buttonBox.addButton(t('Copy skipped to clipboard'), QDialogButtonBox.ButtonRole.ApplyRole)
                 copy.clicked.connect(lambda: QApplication.clipboard().setText(skipped))
             dlg.exec()
 
@@ -711,7 +727,8 @@ class MainWindow(QMainWindow):
 
 # Main ##################################################################
 def init():
-    action = QAction(LABEL, mw)
+    load_translation(translations)
+    action = QAction(t("Create notes from web image search"), mw)
     if sc := mw.addonManager.getConfig(__name__).get('Shortcut open'):
         action.setShortcut(sc)
     action.triggered.connect(lambda: MainWindow())
@@ -741,7 +758,7 @@ def init():
 
     # Ask user to post debug log 
     if os.path.exists(DEBUG_FILE) and (not os.path.exists(DEBUG_PROMPTED) or os.path.getmtime(DEBUG_FILE) > os.path.getmtime(DEBUG_PROMPTED)):
-        show_info(text=STR_PROMPT_LOG)
+        show_info(t('Search to notes add-on has detected an error log, consider reviewing it for any privacy concerns and then post the contents to the add-on support thread (https://forums.ankiweb.net/t/search-to-notes-support-thread/16286) to help the author and other users. The debuglog can be found here: "%(file)s".' % {'file': DEBUG_FILE}))
         with open(DEBUG_PROMPTED, "w") as fh:
             fh.write(time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(time.ctime(os.path.getmtime(DEBUG_FILE)))))
 
