@@ -18,7 +18,7 @@ DEBUG_PROMPTED = os.path.join(ADDON_DIR, DEBUG_PROMPTEDNAME)
 # CONFIG KEYS
 CFG_THUMBH = "Thumbnail height"
 CFG_THUMBW = "Thumbnail width"
-CFG_TEMPLATE =  "Query template"
+CFG_TEMPLATE = "Query template"
 CFG_ENGINE = "Engine"
 CFG_IMGH = "Image height"
 CFG_IMGW = "Image width"
